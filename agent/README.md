@@ -8,7 +8,24 @@ and repairing what fails.
 cd agent
 cp .env.example .env          # add a GEMINI_API_KEY (free: https://aistudio.google.com/apikey)
 npm install
-npm run agent -- --spec ./specs/car-inventory.spec.md --output ../generated-app
+npm run agent -- --spec ./specs/car-inventory.spec.md
+```
+
+The repository root delegates too, so this works from either directory — paths
+are relative to wherever you run it, and `--output` defaults to `generated-app/`
+beside the boilerplate in both cases:
+
+```bash
+npm run agent:install
+npm run agent -- --spec ./agent/specs/car-inventory.spec.md
+```
+
+Free-tier quota is metered per model and the flash tiers are small. If a run
+stops on a 429, the agent prints the models your key can still reach; passing
+one explicitly avoids the round trip:
+
+```bash
+LLM_MODEL=gemini-flash-lite-latest npm run agent -- --spec ./agent/specs/car-inventory.spec.md
 ```
 
 Then the generated app, which is what the agent is judged by:

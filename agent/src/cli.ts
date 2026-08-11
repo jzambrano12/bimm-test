@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 import { loadConfig, ConfigError } from "./config.ts";
 import { ArtifactRegistry } from "./context/artifacts.ts";
 import {
@@ -54,6 +55,9 @@ car-inventory-agent — spec-driven code generation into a React + TS boilerplat
 USAGE
   npm run agent -- --spec <file> [options]
 
+  Works from the repository root or from agent/. Paths are relative to wherever
+  you run it; --output defaults to generated-app/ beside the boilerplate either way.
+
 REQUIRED
   --spec <file>          Natural-language specification to implement.
 
@@ -72,14 +76,18 @@ ENVIRONMENT
   Requires an API key in agent/.env — see agent/.env.example.
 
 EXAMPLES
-  npm run agent -- --spec ./specs/car-inventory.spec.md
-  npm run agent -- --spec ./specs/car-inventory.spec.md --dry-run
-  npm run agent -- --spec ./specs/variant.spec.md --output ../variant-app
+  from the repository root:
+    npm run agent -- --spec ./agent/specs/car-inventory.spec.md --dry-run
+  from agent/:
+    npm run agent -- --spec ./specs/car-inventory.spec.md
+    npm run agent -- --spec ./specs/variant.spec.md --dry-run
 `.trimStart();
 
 export interface CliOptions {
   readonly specPath: string;
   readonly outputDir: string;
+  /** True when --output was not given, so it defaulted beside the boilerplate. */
+  readonly outputDefaulted: boolean;
   readonly dryRun: boolean;
   readonly resume: boolean;
   readonly keepExamples: boolean;
@@ -108,10 +116,24 @@ function takeInt(argv: readonly string[], index: number, flag: string): number {
   return parsed;
 }
 
+/**
+ * The directory the user typed the command in.
+ *
+ * npm sets INIT_CWD to the invocation directory, which differs from cwd when a
+ * script delegates across packages: the root passthrough runs with cwd inside
+ * agent/, so a relative --spec typed at the repo root would otherwise resolve
+ * one level too deep. Honouring INIT_CWD makes a path mean what the person who
+ * typed it meant, from either directory.
+ */
+function invocationCwd(): string {
+  const initCwd = process.env["INIT_CWD"];
+  return initCwd === undefined || initCwd.trim() === "" ? process.cwd() : initCwd;
+}
+
 /** Returns undefined when the user asked for help. */
-export function parseArgs(argv: readonly string[]): CliOptions | undefined {
+export function parseArgs(argv: readonly string[], cwd = invocationCwd()): CliOptions | undefined {
   let specPath: string | undefined;
-  let outputDir = "../generated-app";
+  let outputDir: string | undefined;
   let dryRun = false;
   let resume = false;
   let keepExamples = false;
@@ -167,8 +189,16 @@ export function parseArgs(argv: readonly string[]): CliOptions | undefined {
   }
 
   return {
-    specPath: resolve(specPath),
-    outputDir: resolve(outputDir),
+    specPath: resolve(cwd, specPath),
+    // Defaulted output is anchored to the boilerplate rather than to the shell's
+    // location, so `--output` omitted means the same directory wherever the
+    // command was run from. A cwd-relative default silently pointed outside the
+    // repository when invoked from the root.
+    outputDir:
+      outputDir === undefined
+        ? join(boilerplateRoot(), "generated-app")
+        : resolve(cwd, outputDir),
+    outputDefaulted: outputDir === undefined,
     dryRun,
     resume,
     keepExamples,
@@ -358,11 +388,24 @@ async function main(): Promise<number> {
   return outcome.typecheckClean && outcome.testsPassed && degraded.length === 0 ? 0 : 1;
 }
 
-const exitCode = await main().catch((error: unknown) => {
-  if (error instanceof UsageError) {
+/**
+ * True when this file is the process entrypoint rather than an import.
+ *
+ * Without this guard the module ran `main()` on import, so importing it to test
+ * argument parsing executed the agent and called process.exit — which is why the
+ * flag parsing went untested for so long. A CLI should still be a module.
+ */
+function isDirectRun(): boolean {
+  const entry = process.argv[1];
+  return entry !== undefined && import.meta.url === pathToFileURL(entry).href;
+}
+
+export async function run(): Promise<number> {
+    return main().catch((error: unknown) => {
+    if (error instanceof UsageError) {
     process.stderr.write(`error: ${error.message}\n\n${USAGE}`);
     return 2;
-  }
+    }
   if (
     error instanceof ConfigError ||
     error instanceof ModelResolutionError ||
@@ -370,20 +413,20 @@ const exitCode = await main().catch((error: unknown) => {
   ) {
     process.stderr.write(`configuration error: ${error.message}\n`);
     return 78; // EX_CONFIG
-  }
-  if (error instanceof PlanValidationError || error instanceof StructuredOutputError) {
+    }
+    if (error instanceof PlanValidationError || error instanceof StructuredOutputError) {
     process.stderr.write(`planning failed: ${error.message}\n`);
     return 65; // EX_DATAERR
-  }
-  if (error instanceof ScaffoldError) {
+    }
+    if (error instanceof ScaffoldError) {
     process.stderr.write(`scaffold error: ${error.message}\n`);
     return 73; // EX_CANTCREAT
-  }
-  if (error instanceof GenerationContractError || error instanceof SandboxViolationError) {
+    }
+    if (error instanceof GenerationContractError || error instanceof SandboxViolationError) {
     process.stderr.write(`generation error: ${error.message}\n`);
     return 65; // EX_DATAERR
-  }
-  if (error instanceof LlmError) {
+    }
+    if (error instanceof LlmError) {
     process.stderr.write(`provider error: ${error.message}\n`);
 
     // Free tiers meter each model separately, so an exhausted quota on one
@@ -397,9 +440,12 @@ const exitCode = await main().catch((error: unknown) => {
       );
     }
     return 69; // EX_UNAVAILABLE
-  }
-  process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
-  return 1;
-});
+    }
+    process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
+    return 1;
+    });
+}
 
-process.exit(exitCode);
+if (isDirectRun()) {
+  process.exit(await run());
+}
