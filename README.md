@@ -1,3 +1,20 @@
+> ## Submission
+>
+> The deliverable is the agent in [`agent/`](./agent). Its README covers setup,
+> architecture, design decisions, model choice, measured cost per run and
+> tradeoffs: **[agent/README.md](./agent/README.md)**.
+>
+> ```bash
+> cd agent && cp .env.example .env   # add a GEMINI_API_KEY
+> npm install
+> npm run agent -- --spec ./specs/car-inventory.spec.md --output ../generated-app
+> ```
+>
+> `generated-app/` is a committed sample output. The brief as received follows
+> below, unchanged.
+
+---
+
 # Senior Fullstack Engineer — Take-Home Challenge
 
 ## Agentic Code Generation Workflow

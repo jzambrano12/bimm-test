@@ -1,14 +1,15 @@
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import {
   Box,
-  TextField,
   Button,
-  CircularProgress,
+  TextField,
+  Typography,
   Alert,
+  CircularProgress,
 } from "@mui/material";
 
 export interface AddCarFormProps {
-  onSubmit: (input: {
+  onAddCar: (input: {
     make: string;
     model: string;
     year: number;
@@ -17,14 +18,14 @@ export interface AddCarFormProps {
   loading: boolean;
 }
 
-export function AddCarForm({ onSubmit, loading }: AddCarFormProps) {
+export function AddCarForm({ onAddCar, loading }: AddCarFormProps) {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
   const [year, setYear] = useState("");
   const [color, setColor] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setValidationError(null);
 
@@ -44,7 +45,7 @@ export function AddCarForm({ onSubmit, loading }: AddCarFormProps) {
     }
 
     try {
-      await onSubmit({
+      await onAddCar({
         make: trimmedMake,
         model: trimmedModel,
         year: parsedYear,
@@ -54,73 +55,60 @@ export function AddCarForm({ onSubmit, loading }: AddCarFormProps) {
       setModel("");
       setYear("");
       setColor("");
-    } catch (err) {
-      if (err instanceof Error) {
-        setValidationError(err.message);
-      } else {
-        setValidationError("An unexpected error occurred.");
-      }
+    } catch {
+      // Error handling can be delegated or handled by parent mutation error state
     }
   };
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      noValidate
-      sx={{ display: "flex", flexDirection: "column", gap: 2, mb: 4 }}
-    >
+    <Box component="form" onSubmit={handleSubmit} sx={{ mt: 2, mb: 3 }}>
+      <Typography variant="h6" gutterBottom>
+        Add New Car
+      </Typography>
       {validationError && (
-        <Alert severity="error" sx={{ mb: 1 }}>
+        <Alert severity="error" sx={{ mb: 2 }}>
           {validationError}
         </Alert>
       )}
-
-      <TextField
-        label="Make"
-        value={make}
-        onChange={(e) => setMake(e.target.value)}
-        disabled={loading}
-        required
-        fullWidth
-      />
-
-      <TextField
-        label="Model"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        disabled={loading}
-        required
-        fullWidth
-      />
-
-      <TextField
-        label="Year"
-        type="number"
-        value={year}
-        onChange={(e) => setYear(e.target.value)}
-        disabled={loading}
-        required
-        fullWidth
-      />
-
-      <TextField
-        label="Colour"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
-        disabled={loading}
-        required
-        fullWidth
-      />
-
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={loading}
-        sx={{ position: "relative" }}
-      >
-        {loading ? <CircularProgress size={24} color="inherit" /> : "Add Car"}
-      </Button>
+      <Box sx={{ display: "flex", flexDirection: "column", gap: 2 }}>
+        <TextField
+          label="Make"
+          value={make}
+          onChange={(e) => setMake(e.target.value)}
+          disabled={loading}
+          required
+        />
+        <TextField
+          label="Model"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={loading}
+          required
+        />
+        <TextField
+          label="Year"
+          type="number"
+          value={year}
+          onChange={(e) => setYear(e.target.value)}
+          disabled={loading}
+          required
+        />
+        <TextField
+          label="Color"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          disabled={loading}
+          required
+        />
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={loading}
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}
+        >
+          {loading ? "Adding Car..." : "Add Car"}
+        </Button>
+      </Box>
     </Box>
   );
 }

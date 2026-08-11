@@ -32,8 +32,13 @@ loses the requirement; "Serve the mobile image up to 640px, tablet from 641px to
 1023px, desktop at 1024px and above" is the requirement.
 
 Set \`required\` exactly as the specification frames it: mandatory items are
-true, anything the spec calls optional, bonus, stretch or nice-to-have is false. Do not invent requirements
-the specification does not state, and do not drop ones it does. This list is
+true, anything the spec calls optional, bonus, stretch or nice-to-have is false.
+
+Do not invent requirements the specification does not state, and do not drop ones
+it does. An optional section that lists three items is three requirements, not
+one — enumerate each separately, however briefly the spec mentions it. Dropping
+optional items is the easiest fidelity mistake to make and the hardest to notice,
+because nothing downstream fails when they are missing. This list is
 the contract the finished app is judged against, so it must mirror the spec and
 nothing else.
 

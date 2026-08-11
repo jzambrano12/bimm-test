@@ -1,4 +1,5 @@
-import { Card, CardContent, CardMedia, Typography, useMediaQuery } from "@mui/material";
+import { Card, CardContent, Typography } from "@mui/material";
+import { ResponsiveCarImage } from "@/components/ResponsiveCarImage";
 import type { Car } from "@/types";
 
 export interface CarCardProps {
@@ -6,27 +7,19 @@ export interface CarCardProps {
 }
 
 export function CarCard({ car }: CarCardProps) {
-  const isMobile = useMediaQuery("(max-width: 640px)");
-  const isTablet = useMediaQuery("(min-width: 641px) and (max-width: 1023px)");
-
-  let imageUrl = car.desktop;
-  if (isMobile) {
-    imageUrl = car.mobile;
-  } else if (isTablet) {
-    imageUrl = car.tablet;
-  }
+  const altText = `${car.year} ${car.make} ${car.model}`;
 
   return (
-    <Card sx={{ mb: 2, height: "100%", display: "flex", flexDirection: "column" }}>
-      <CardMedia
-        component="img"
-        height="200"
-        image={imageUrl}
-        alt={`${car.year} ${car.make} ${car.model}`}
+    <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
+      <ResponsiveCarImage
+        mobile={car.mobile}
+        tablet={car.tablet}
+        desktop={car.desktop}
+        alt={altText}
       />
       <CardContent sx={{ flexGrow: 1 }}>
         <Typography variant="h6" gutterBottom>
-          {car.year} {car.make} {car.model}
+          {altText}
         </Typography>
         <Typography color="text.secondary">
           Colour: {car.color}
