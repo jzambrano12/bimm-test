@@ -192,7 +192,12 @@ async function main(): Promise<number> {
   process.stdout.write(`\n${renderPlan(ordered)}\n`);
 
   if (options.dryRun) {
-    process.stdout.write("\ndry run: stopping before generation\n");
+    const { totals } = ledger.snapshot();
+    process.stdout.write(
+      `\ndry run: stopping before generation ` +
+        `(${totals.calls} LLM call(s), ` +
+        `${totals.promptTokens} prompt + ${totals.completionTokens} completion tokens)\n`,
+    );
     return 0;
   }
 

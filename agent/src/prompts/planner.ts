@@ -35,7 +35,12 @@ Rules, all of which are enforced mechanically after you answer:
 - \`dependsOn\` lists task ids whose exports this task imports, or whose files it
   must be able to reference. Anything else must not be listed.
 - The graph must be acyclic.
-- A task that tests another task's output depends on it.
+- A task that tests another task's output depends on it, and on as little else
+  as possible. Give each independently testable unit its own test task. Never
+  produce one omnibus test file covering several units: it becomes the largest
+  file, generated last, and a single mistake in it invalidates coverage of
+  everything at once. Prefer four focused test files over one that does
+  everything.
 - The task that wires features into the application shell depends on every
   feature task it renders.
 - Order shared abstractions before their consumers: data access before the
