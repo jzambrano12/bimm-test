@@ -1,0 +1,27 @@
+{
+  "name": "car-inventory-agent",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Agentic code-generation CLI: reads a natural-language spec and generates a React + TypeScript app into the provided boilerplate, self-validating with typecheck and tests.",
+  "scripts": {
+    "agent": "tsx src/cli.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "dotenv": "^17.4.2",
+    "openai": "^7.4.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "tsx": "^4.23.12",
+    "typescript": "^7.0.2",
+    "vitest": "^4.1.10"
+  }
+}
