@@ -131,8 +131,40 @@ function findDroppedSpecValues(plan: TaskPlan, spec: string): string[] {
   ];
 }
 
+/**
+ * Warns about tasks that no test task covers.
+ *
+ * The prompt asks for a test task per independently testable unit, and mostly
+ * gets one — but a specification whose testing requirement is a single bullet
+ * listing five behaviours tends to produce a single omnibus test task, which is
+ * the largest file, generated last, where one mistake invalidates coverage of
+ * everything at once.
+ *
+ * Coverage at the task level is checkable without a model: a task is covered when
+ * some test task depends on it. Reported rather than enforced, because a
+ * genuinely trivial task does not need its own spec file and drawing that line is
+ * a judgement the agent should not be making unilaterally.
+ */
+function findUntestedTasks(plan: TaskPlan): string[] {
+  const testTasks = plan.tasks.filter((task) => task.kind === "test");
+  if (testTasks.length === 0) return [];
+
+  const covered = new Set(testTasks.flatMap((task) => task.dependsOn));
+  const uncovered = plan.tasks.filter(
+    (task) => task.kind !== "test" && task.kind !== "integration" && !covered.has(task.id),
+  );
+
+  if (uncovered.length === 0) return [];
+
+  return [
+    `no test task depends on ${uncovered.map((task) => `"${task.id}"`).join(", ")} — ` +
+      `${uncovered.length} of ${plan.tasks.length - testTasks.length} implementation task(s) ` +
+      `have no test covering them directly`,
+  ];
+}
+
 function findWarnings(plan: TaskPlan): string[] {
-  const warnings: string[] = [];
+  const warnings: string[] = [...findUntestedTasks(plan)];
   const requirementIds = new Set(plan.requirements.map((requirement) => requirement.id));
   const cited = new Set(plan.tasks.flatMap((task) => task.satisfies));
 

@@ -282,3 +282,71 @@ describe("validateAndOrder — dropped specification values", () => {
     expect(ordered.warnings).toEqual([]);
   });
 });
+
+describe("validateAndOrder — test coverage at the task level", () => {
+  /**
+   * A specification whose testing requirement is one bullet listing five
+   * behaviours tends to produce one omnibus test task: the largest file,
+   * generated last, where a single mistake invalidates coverage of everything.
+   * Checkable without a model — a task is covered when a test task depends on it.
+   */
+  it("warns about implementation tasks no test task depends on", () => {
+    const ordered = validateAndOrder(
+      plan([
+        task({ id: "list" }),
+        task({ id: "detail" }),
+        task({
+          id: "one-big-test",
+          kind: "test",
+          dependsOn: ["list"],
+          targetFiles: ["src/__tests__/All.test.tsx"],
+        }),
+      ]),
+    );
+
+    expect(ordered.warnings.join()).toMatch(/no test task depends on "detail"/);
+    expect(ordered.warnings.join()).not.toMatch(/"list"/);
+  });
+
+  it("stays quiet when every implementation task has a test", () => {
+    const ordered = validateAndOrder(
+      plan([
+        task({ id: "list" }),
+        task({
+          id: "list-test",
+          kind: "test",
+          dependsOn: ["list"],
+          targetFiles: ["src/__tests__/List.test.tsx"],
+        }),
+      ]),
+    );
+
+    expect(ordered.warnings.join()).not.toMatch(/no test task depends on/);
+  });
+
+  it("does not demand a direct test for the integration shell", () => {
+    // The shell is exercised through whatever it composes; requiring its own
+    // test file would be noise.
+    const ordered = validateAndOrder(
+      plan([
+        task({ id: "list" }),
+        task({ id: "shell", kind: "integration", dependsOn: ["list"], targetFiles: ["src/App.tsx"] }),
+        task({
+          id: "list-test",
+          kind: "test",
+          dependsOn: ["list"],
+          targetFiles: ["src/__tests__/List.test.tsx"],
+        }),
+      ]),
+    );
+
+    expect(ordered.warnings.join()).not.toMatch(/no test task depends on/);
+  });
+
+  it("says nothing when the plan has no tests at all", () => {
+    // Already covered by the requirement-traceability warning; repeating it here
+    // would just be a second voice on the same fact.
+    const ordered = validateAndOrder(plan([task({ id: "a" })]));
+    expect(ordered.warnings.join()).not.toMatch(/no test task depends on/);
+  });
+});

@@ -259,8 +259,22 @@ from every section. The test for whether such a rule belongs is whether it would
 help a completely different spec on this boilerplate. These would. A rule about
 sorting cars by year would not, and there isn't one.
 
-Run `--spec ./specs/variant.spec.md` to see a different spec produce a different
-plan.
+Two further specs exist for this, and each stresses something the sample does
+not:
+
+- **`variant.spec.md`** — a fleet colour audit. Grouped summary rows with counts
+  and year ranges, a dense sortable table, click-to-filter, flagging of
+  implausible years. Aggregation and tables where the sample has cards.
+- **`detail-inspector.spec.md`** — a keyboard-driven read-only lookup. Forces the
+  `GetCar` single-record query that neither other spec exercises, requires
+  handling the error the mock returns for an unknown id, and **explicitly
+  forbids** any add form, search, sort or images. That last part is the sharpest
+  generalisation test in the repository: the sample spec asks for an add form, so
+  producing one here would be carryover rather than comprehension. It does not.
+  The plan also preserves the spec's literal values — a 22-character truncation
+  limit and two exact on-screen strings.
+
+Both produce plans with no vocabulary or structure carried over from the sample.
 
 ---
 
@@ -311,6 +325,14 @@ that file. The agent correctly degrades and names the likely culprit rather than
 deleting the assertion to go green, but the honest outcome is still a failure it
 could have fixed. Routing such failures to the dependency, with a guard against
 rewriting the test to match wrong behaviour, is the missing piece.
+
+**Get test granularity to hold across specs.** The planner is asked for a test
+task per independently testable unit and usually complies, but a specification
+whose testing requirement is one bullet listing five behaviours still yields a
+single omnibus test file. Rather than ask more loudly, plan validation now warns
+which implementation tasks no test task covers — on `detail-inspector.spec.md`
+that is 4 of 6. Turning that warning into a planner correction round is the
+obvious next step and the one I would take first.
 
 **Generate the app's own tests from the requirements, not from the
 implementation.** Generated tests are written after the component and tend to
