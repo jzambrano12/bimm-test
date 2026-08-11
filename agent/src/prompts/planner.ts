@@ -21,9 +21,18 @@ Work in two steps.
 
 STEP 1 — Extract requirements.
 Read the specification and list what it asks for, one entry per discrete
-capability. Restate each in a single sentence. Set \`required\` exactly as the
-specification frames it: mandatory items are true, anything the spec calls
-optional, bonus, stretch or nice-to-have is false. Do not invent requirements
+capability. Restate each in a single sentence.
+
+Carry every specific value the specification states into the requirement text
+verbatim: thresholds, pixel widths, limits, sort directions, field names, exact
+message wording. This is not optional detail. Later stages never see the
+specification — they see your restatement — so a value you drop here is a value
+the code will invent. "Select the right image for the viewport" is a summary that
+loses the requirement; "Serve the mobile image up to 640px, tablet from 641px to
+1023px, desktop at 1024px and above" is the requirement.
+
+Set \`required\` exactly as the specification frames it: mandatory items are
+true, anything the spec calls optional, bonus, stretch or nice-to-have is false. Do not invent requirements
 the specification does not state, and do not drop ones it does. This list is
 the contract the finished app is judged against, so it must mirror the spec and
 nothing else.
@@ -84,7 +93,8 @@ A well-formed plan for that excerpt:
   "requirements": [
     { "id": "list-books", "text": "Display books returned by the GetBooks query.", "required": true },
     { "id": "filter-by-title", "text": "Filter the displayed books by title.", "required": true },
-    { "id": "show-page-count", "text": "Show each book's page count.", "required": false }
+    { "id": "show-page-count", "text": "Show each book's page count.", "required": false },
+    { "id": "page-size", "text": "Show at most 20 books per page.", "required": true }
   ],
   "tasks": [
     {
@@ -117,8 +127,8 @@ A well-formed plan for that excerpt:
       "dependsOn": ["use-books-hook", "book-row"],
       "exports": ["BookList"],
       "exportedInterface": "export interface BookListProps { books: Book[]; loading: boolean; titleFilter: string; onTitleFilterChange: (value: string) => void }\\nexport function BookList(props: BookListProps)",
-      "satisfies": ["list-books", "filter-by-title"],
-      "acceptanceCriteria": ["Renders one BookRow per book", "Filters case-insensitively as the user types", "Shows a loading indicator while the query is in flight"]
+      "satisfies": ["list-books", "filter-by-title", "page-size"],
+      "acceptanceCriteria": ["Renders one BookRow per book", "Shows at most 20 books per page", "Filters case-insensitively as the user types", "Shows a loading indicator while the query is in flight"]
     },
     {
       "id": "book-list-test",

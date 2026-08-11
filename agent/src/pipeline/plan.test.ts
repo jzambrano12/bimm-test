@@ -213,3 +213,72 @@ describe("renderPlan", () => {
     expect(rendered).toContain("satisfies: req-a");
   });
 });
+
+describe("validateAndOrder — dropped specification values", () => {
+  const spec = "Serve mobile up to 640px, tablet 641px to 1023px, desktop 1024px or wider.";
+
+  /**
+   * The upstream cause of a real cascade: the planner summarised a viewport
+   * requirement without its thresholds, the generator reached for its UI
+   * library's defaults because it had never seen them, and the reviewer had
+   * nothing to compare and passed it.
+   */
+  it("warns when a requirement loses the values the spec stated", () => {
+    const ordered = validateAndOrder(
+      plan(
+        [task({ id: "img", satisfies: ["req-a"] })],
+        [{ id: "req-a", text: "Pick the right image for the viewport.", required: true }],
+      ),
+      spec,
+    );
+
+    expect(ordered.warnings.join()).toMatch(/640/);
+    expect(ordered.warnings.join()).toMatch(/generated code will choose for itself/);
+  });
+
+  it("stays quiet when the requirement carries the values forward", () => {
+    const ordered = validateAndOrder(
+      plan(
+        [task({ id: "img", satisfies: ["req-a"] })],
+        [
+          {
+            id: "req-a",
+            text: "Serve mobile up to 640px, tablet 641px to 1023px, desktop 1024px or wider.",
+            required: true,
+          },
+        ],
+      ),
+      spec,
+    );
+
+    expect(ordered.warnings.join()).not.toMatch(/640/);
+  });
+
+  it("accepts values carried in acceptance criteria instead of requirement text", () => {
+    const ordered = validateAndOrder(
+      plan(
+        [
+          task({
+            id: "img",
+            satisfies: ["req-a"],
+            acceptanceCriteria: ["Uses 640px, 641px, 1023px and 1024px as the boundaries"],
+          }),
+        ],
+        [{ id: "req-a", text: "Pick the right image.", required: true }],
+      ),
+      spec,
+    );
+
+    expect(ordered.warnings.join()).not.toMatch(/640/);
+  });
+
+  it("does not check for dropped values when no spec is supplied", () => {
+    const ordered = validateAndOrder(plan([task({ id: "a" })]));
+    expect(ordered.warnings).toEqual([]);
+  });
+
+  it("ignores single-digit numbers as incidental prose", () => {
+    const ordered = validateAndOrder(plan([task({ id: "a" })]), "There are 5 seed records.");
+    expect(ordered.warnings).toEqual([]);
+  });
+});

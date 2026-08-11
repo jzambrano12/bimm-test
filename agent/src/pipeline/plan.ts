@@ -3,6 +3,7 @@ import { completeStructured } from "../llm/structured.ts";
 import type { UsageLedger } from "../llm/usage.ts";
 import { PLANNER_SYSTEM, buildPlannerUser } from "../prompts/planner.ts";
 import { TaskPlan, type PlannedTask } from "../schemas.ts";
+import { extractStatedValues } from "../context/specValues.ts";
 import { checkWritable } from "../tools/fs.ts";
 
 export class PlanValidationError extends Error {
@@ -92,6 +93,43 @@ function findErrors(plan: TaskPlan): string[] {
   return issues;
 }
 
+/**
+ * Warns when the requirement list drops a value the specification stated.
+ *
+ * The requirement text is a lossy compression of the spec, and every stage after
+ * planning reads the compression rather than the original. A run once lost
+ * "640px", "1023px" and "1024px" from a viewport requirement, and the
+ * consequences cascaded: the generator, never having seen the thresholds, reached
+ * for its UI library's defaults, and the reviewer had nothing to compare against
+ * and passed it. Two stages failed for one upstream omission.
+ *
+ * A warning rather than an error, because prose contains incidental numbers — a
+ * count of seed records, a version — and blocking a plan over one would be worse
+ * than the omission it prevents.
+ */
+function findDroppedSpecValues(plan: TaskPlan, spec: string): string[] {
+  const stated = extractStatedValues(spec);
+  if (stated.length === 0) return [];
+
+  const carried = new Set(
+    extractStatedValues(
+      plan.requirements
+        .map((requirement) => requirement.text)
+        .concat(plan.tasks.map((task) => task.acceptanceCriteria.join(" ")))
+        .join(" "),
+    ),
+  );
+
+  const dropped = stated.filter((value) => !carried.has(value));
+  if (dropped.length === 0) return [];
+
+  return [
+    `the specification states ${dropped.join(", ")}, and no requirement or acceptance ` +
+      `criterion repeats these values — later stages never see the specification, so any ` +
+      `value missing here is one the generated code will choose for itself`,
+  ];
+}
+
 function findWarnings(plan: TaskPlan): string[] {
   const warnings: string[] = [];
   const requirementIds = new Set(plan.requirements.map((requirement) => requirement.id));
@@ -150,7 +188,11 @@ function toLevels(tasks: readonly PlannedTask[]): {
   return { levels, unresolved: [...remaining.values()] };
 }
 
-export function validateAndOrder(plan: TaskPlan): OrderedPlan {
+/**
+ * @param spec When given, the plan is additionally checked for specification
+ *   values its requirement list failed to carry forward.
+ */
+export function validateAndOrder(plan: TaskPlan, spec?: string): OrderedPlan {
   const issues = findErrors(plan);
 
   // Ordering is only meaningful once references resolve, so bail before it.
@@ -166,7 +208,12 @@ export function validateAndOrder(plan: TaskPlan): OrderedPlan {
     ]);
   }
 
-  return { plan, levels, warnings: findWarnings(plan) };
+  const warnings = [
+    ...findWarnings(plan),
+    ...(spec === undefined ? [] : findDroppedSpecValues(plan, spec)),
+  ];
+
+  return { plan, levels, warnings };
 }
 
 export interface PlanRequest {
@@ -201,7 +248,7 @@ export async function createPlan(
   });
 
   try {
-    return validateAndOrder(first);
+    return validateAndOrder(first, request.spec);
   } catch (error) {
     if (!(error instanceof PlanValidationError)) throw error;
 
@@ -218,7 +265,7 @@ export async function createPlan(
       schemaName: "TaskPlan",
     });
 
-    return validateAndOrder(corrected);
+    return validateAndOrder(corrected, request.spec);
   }
 }
 

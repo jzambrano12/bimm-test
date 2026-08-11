@@ -8,6 +8,7 @@ import {
   type ReviewFinding,
   type SpecRequirement,
 } from "../schemas.ts";
+import { citesAnyValue, extractStatedValues } from "../context/specValues.ts";
 import { checkWritable } from "../tools/fs.ts";
 import type { GenerationContext } from "./generate.ts";
 import type { OrderedPlan } from "./plan.ts";
@@ -94,9 +95,6 @@ export async function reviewBuild(
   };
 }
 
-/** Numbers worth comparing. Two digits or more, to skip counts like "3 tests". */
-const SPEC_VALUE = /\d{2,}/g;
-
 /**
  * Checks the reviewer's verdicts against its own evidence.
  *
@@ -125,11 +123,9 @@ export function auditFindings(
     const requirementText = textOf.get(finding.requirementId);
     if (requirementText === undefined) return finding;
 
-    const stated = [...new Set(requirementText.match(SPEC_VALUE) ?? [])];
+    const stated = extractStatedValues(requirementText);
     if (stated.length === 0) return finding;
-
-    const cited = stated.filter((value) => finding.evidence.includes(value));
-    if (cited.length > 0) return finding;
+    if (citesAnyValue(finding.evidence, stated)) return finding;
 
     downgraded.push(finding.requirementId);
     return {
