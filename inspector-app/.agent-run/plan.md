@@ -4,66 +4,75 @@ Spec: `/Users/jorgeweb/Dev/assesments/exsq/BIMM Senior FullStack Agentic AI Chal
 Planner: `gemini-flash-lite-latest` · Generator: `gemini-flash-lite-latest`
 
 ```
-Build a keyboard-driven read-only vehicle detail inspector with a master list and a detail panel. Data access is isolated into dedicated custom hooks.
+Build a keyboard-driven vehicle detail inspector with a master list and detail panel, using isolated Apollo hooks and exhaustive tests.
 
 Requirements: 8 required, 3 optional
-  [required] master-list-and-detail-panel: A master list and a detail panel, side by side, where the left side is a compact list showing year, make, and model, and the right side shows the full record for the selected vehicle or 'Select a vehicle to inspect' when nothing is selected.
-  [required] fetch-selected-vehicle-individually: When a vehicle is selected, request that single vehicle from the API by its id using the GetCar query and show the result in the detail panel.
-  [required] handle-unavailable-vehicle: When the API returns an error for a vehicle lookup, the detail panel shows 'Vehicle unavailable' and the error message, while the list stays usable and populated.
-  [required] keyboard-navigation: The up and down arrow keys move selection through the list with wrapping, Enter re-fetches the currently selected vehicle, rows have distinct focus styling, and the list is reachable by keyboard without clicking.
-  [required] truncate-long-descriptions: In the compact list, if the combined make and model exceeds 22 characters, cut it at 22 and append a single ellipsis character.
-  [required] show-colour-as-text: Show the vehicle's colour as legible text, not as a swatch.
-  [required] keep-data-access-in-hooks: Keep data access in hooks: one hook for the list and one for the single-vehicle lookup.
-  [required] tests: Cover what would break: list rendering, single-vehicle selection request, error handling without list emptying, arrow key movement and wrapping, and name truncation vs detail panel.
-  [optional] lookup-duration: Show how long the last lookup took, in milliseconds.
+  [required] master-list-and-detail: Display a master list showing year, make, and model on the left, and a detail panel showing the full record on the right, with no vehicle selected initially.
+  [required] fetch-single-vehicle: Fetch the selected vehicle individually using the single vehicle query when a vehicle is selected.
+  [required] handle-fetch-error: Show Vehicle unavailable and the API error message in the detail panel if single vehicle fetch fails, keeping the list usable.
+  [required] keyboard-navigation: Support up and down arrow keys to move and wrap selection through the list, Enter to re-fetch, distinct visual focus vs selection, and keyboard reachability.
+  [required] truncate-descriptions: Truncate combined make and model in the compact list at 22 characters appending an ellipsis, while keeping detail panel untruncated.
+  [required] color-as-text: Show the vehicle's colour as readable text rather than a swatch.
+  [required] hooks-isolation: Keep data access in separate hooks for the list and single-vehicle lookup with no direct GraphQL calls in components.
+  [required] tests-coverage: Cover list rendering, single-vehicle request on selection, error state without emptying the list, arrow key navigation and wrapping, and truncation.
+  [optional] lookup-duration: Show how long the last lookup took in milliseconds.
   [optional] home-end-keys: Let the Home and End keys jump to the first and last vehicle.
-  [optional] copy-to-clipboard: Copy the selected vehicle's details to the clipboard with a button.
+  [optional] clipboard-copy: Copy the selected vehicle's details to the clipboard with a button.
 
-Tasks: 7 across 3 dependency level(s)
+Tasks: 9 across 4 dependency level(s)
   level 1 — 4 in parallel
     use-cars-hook (hook) → src/hooks/useCars.ts
-      Create useCars data hook
-      satisfies: master-list-and-detail-panel, keep-data-access-in-hooks
+      Create useCars hook for fetching vehicle list
+      satisfies: master-list-and-detail, hooks-isolation
     use-car-hook (hook) → src/hooks/useCar.ts
-      Create useCar data hook
-      satisfies: fetch-selected-vehicle-individually, handle-unavailable-vehicle, keep-data-access-in-hooks, lookup-duration
-    vehicle-list-component (component) → src/components/VehicleList.tsx
-      Create VehicleList compact list component
-      satisfies: master-list-and-detail-panel, keyboard-navigation, truncate-long-descriptions
-    vehicle-detail-component (component) → src/components/VehicleDetail.tsx
-      Create VehicleDetail detail panel component
-      satisfies: master-list-and-detail-panel, handle-unavailable-vehicle, show-colour-as-text, lookup-duration, copy-to-clipboard
+      Create useCar hook for fetching single vehicle
+      satisfies: fetch-single-vehicle, handle-fetch-error, hooks-isolation, lookup-duration
+    truncate-util (component) → src/utils/format.ts
+      Create string truncation utility
+      satisfies: truncate-descriptions
+    car-detail-component (component) → src/components/CarDetail.tsx
+      Create CarDetail component for full record and error handling
+      satisfies: master-list-and-detail, handle-fetch-error, color-as-text, lookup-duration, clipboard-copy
   level 2
-    inspector-view-component (component) → src/components/InspectorView.tsx
-      Create InspectorView side-by-side layout component
-      needs: use-cars-hook, use-car-hook, vehicle-list-component, vehicle-detail-component
-      satisfies: master-list-and-detail-panel, fetch-selected-vehicle-individually, handle-unavailable-vehicle, keyboard-navigation, keep-data-access-in-hooks
+    car-list-component (component) → src/components/CarList.tsx
+      Create CarList component with keyboard navigation and truncation
+      needs: truncate-util
+      satisfies: master-list-and-detail, keyboard-navigation, truncate-descriptions, home-end-keys
   level 3 — 2 in parallel
-    inspector-view-test (test) → src/__tests__/InspectorView.test.tsx
-      Create tests for Vehicle Inspector
-      needs: inspector-view-component
-      satisfies: tests
+    inspector-app (component) → src/components/VehicleInspector.tsx
+      Create VehicleInspector main view component
+      needs: use-cars-hook, use-car-hook, car-list-component, car-detail-component
+      satisfies: master-list-and-detail, fetch-single-vehicle, handle-fetch-error, keyboard-navigation, hooks-isolation
+    car-list-test (test) → src/__tests__/CarList.test.tsx
+      Test CarList navigation and truncation
+      needs: car-list-component
+      satisfies: tests-coverage, keyboard-navigation, truncate-descriptions
+  level 4 — 2 in parallel
     app-shell (integration) → src/App.tsx
-      Compose InspectorView into app shell
-      needs: inspector-view-component
-      satisfies: master-list-and-detail-panel
+      Mount VehicleInspector in App.tsx
+      needs: inspector-app
+      satisfies: master-list-and-detail
+    vehicle-inspector-test (test) → src/__tests__/VehicleInspector.test.tsx
+      Test VehicleInspector integration and error states
+      needs: inspector-app
+      satisfies: tests-coverage, master-list-and-detail, fetch-single-vehicle, handle-fetch-error
 
 Warnings (1):
-  - no test task depends on "use-cars-hook", "use-car-hook", "vehicle-list-component", "vehicle-detail-component" — 4 of 6 implementation task(s) have no test covering them directly
+  - no test task depends on "use-cars-hook", "use-car-hook", "truncate-util", "car-detail-component" — 4 of 7 implementation task(s) have no test covering them directly
 ```
 
 ## Requirement traceability
 
 | Requirement | Required | Tasks | Review |
 | --- | --- | --- | --- |
-| master-list-and-detail-panel | yes | use-cars-hook, vehicle-list-component, vehicle-detail-component, inspector-view-component, app-shell | satisfied |
-| fetch-selected-vehicle-individually | yes | use-car-hook, inspector-view-component | satisfied |
-| handle-unavailable-vehicle | yes | use-car-hook, vehicle-detail-component, inspector-view-component | satisfied |
-| keyboard-navigation | yes | vehicle-list-component, inspector-view-component | satisfied |
-| truncate-long-descriptions | yes | vehicle-list-component | satisfied |
-| show-colour-as-text | yes | vehicle-detail-component | satisfied |
-| keep-data-access-in-hooks | yes | use-cars-hook, use-car-hook, inspector-view-component | satisfied |
-| tests | yes | inspector-view-test | satisfied |
-| lookup-duration | no | use-car-hook, vehicle-detail-component | satisfied |
-| home-end-keys | no | — | satisfied |
-| copy-to-clipboard | no | vehicle-detail-component | satisfied |
+| master-list-and-detail | yes | use-cars-hook, car-list-component, car-detail-component, inspector-app, app-shell, vehicle-inspector-test | satisfied |
+| fetch-single-vehicle | yes | use-car-hook, inspector-app, vehicle-inspector-test | satisfied |
+| handle-fetch-error | yes | use-car-hook, car-detail-component, inspector-app, vehicle-inspector-test | satisfied |
+| keyboard-navigation | yes | car-list-component, inspector-app, car-list-test | satisfied |
+| truncate-descriptions | yes | truncate-util, car-list-component, car-list-test | satisfied |
+| color-as-text | yes | car-detail-component | satisfied |
+| hooks-isolation | yes | use-cars-hook, use-car-hook, inspector-app | satisfied |
+| tests-coverage | yes | car-list-test, vehicle-inspector-test | satisfied |
+| lookup-duration | no | use-car-hook, car-detail-component | satisfied |
+| home-end-keys | no | car-list-component | satisfied |
+| clipboard-copy | no | car-detail-component | satisfied |

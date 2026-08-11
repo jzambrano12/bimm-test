@@ -1,5 +1,5 @@
-import { InspectorView } from "@/components/InspectorView";
+import { VehicleInspector } from "@/components/VehicleInspector";
 
 export default function App() {
-  return <InspectorView />;
+  return <VehicleInspector />;
 }

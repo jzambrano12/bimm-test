@@ -6,69 +6,71 @@
     "planner": "gemini-flash-lite-latest",
     "worker": "gemini-flash-lite-latest"
   },
-  "durationMs": 89223,
+  "durationMs": 72936,
   "result": {
     "typecheckClean": true,
     "testsPassed": true,
     "filesWritten": [
       "src/hooks/useCars.ts",
       "src/hooks/useCar.ts",
-      "src/components/VehicleList.tsx",
-      "src/components/VehicleDetail.tsx",
-      "src/components/InspectorView.tsx",
-      "src/__tests__/InspectorView.test.tsx",
-      "src/App.tsx"
+      "src/utils/format.ts",
+      "src/components/CarList.tsx",
+      "src/components/CarDetail.tsx",
+      "src/components/VehicleInspector.tsx",
+      "src/App.tsx",
+      "src/__tests__/CarList.test.tsx",
+      "src/__tests__/VehicleInspector.test.tsx"
     ]
   },
   "usage": {
-    "calls": 12,
-    "cacheHits": 1,
-    "promptTokens": 57794,
-    "completionTokens": 12759,
+    "calls": 15,
+    "cacheHits": 0,
+    "promptTokens": 68308,
+    "completionTokens": 12996,
     "byPhase": {
       "plan": {
-        "calls": 0,
-        "cacheHits": 1,
-        "promptTokens": 0,
-        "completionTokens": 0
+        "calls": 1,
+        "cacheHits": 0,
+        "promptTokens": 3912,
+        "completionTokens": 2371
       },
       "generate": {
-        "calls": 7,
+        "calls": 9,
         "cacheHits": 0,
-        "promptTokens": 26493,
-        "completionTokens": 5891
+        "promptTokens": 34045,
+        "completionTokens": 5921
       },
       "repair": {
         "calls": 4,
         "cacheHits": 0,
-        "promptTokens": 24485,
-        "completionTokens": 5917
+        "promptTokens": 23495,
+        "completionTokens": 3643
       },
       "review": {
         "calls": 1,
         "cacheHits": 0,
-        "promptTokens": 6816,
-        "completionTokens": 951
+        "promptTokens": 6856,
+        "completionTokens": 1061
       }
     }
   },
   "cost": {
     "priced": true,
-    "estimatedUsd": 0.0492,
+    "estimatedUsd": 0.053,
     "basis": "$0.3/M input, $2.5/M output. Free tier cost is $0.00"
   },
   "cache": {
-    "hits": 1,
-    "misses": 12,
-    "enabled": true
+    "hits": 0,
+    "misses": 0,
+    "enabled": false
   },
   "planWarnings": [
-    "no test task depends on \"use-cars-hook\", \"use-car-hook\", \"vehicle-list-component\", \"vehicle-detail-component\" — 4 of 6 implementation task(s) have no test covering them directly"
+    "no test task depends on \"use-cars-hook\", \"use-car-hook\", \"truncate-util\", \"car-detail-component\" — 4 of 7 implementation task(s) have no test covering them directly"
   ],
   "tasks": [
     {
       "taskId": "use-cars-hook",
-      "title": "Create useCars data hook",
+      "title": "Create useCars hook for fetching vehicle list",
       "files": [
         "src/hooks/useCars.ts"
       ],
@@ -79,42 +81,20 @@
     },
     {
       "taskId": "use-car-hook",
-      "title": "Create useCar data hook",
+      "title": "Create useCar hook for fetching single vehicle",
       "files": [
         "src/hooks/useCar.ts"
       ],
-      "status": "generated",
-      "repairAttempts": 0,
-      "unresolved": [],
-      "note": ""
-    },
-    {
-      "taskId": "vehicle-list-component",
-      "title": "Create VehicleList compact list component",
-      "files": [
-        "src/components/VehicleList.tsx"
-      ],
       "status": "repaired",
       "repairAttempts": 1,
       "unresolved": [],
       "note": "compiled after 1 repair attempt(s)"
     },
     {
-      "taskId": "vehicle-detail-component",
-      "title": "Create VehicleDetail detail panel component",
+      "taskId": "truncate-util",
+      "title": "Create string truncation utility",
       "files": [
-        "src/components/VehicleDetail.tsx"
-      ],
-      "status": "repaired",
-      "repairAttempts": 1,
-      "unresolved": [],
-      "note": "compiled after 1 repair attempt(s)"
-    },
-    {
-      "taskId": "inspector-view-component",
-      "title": "Create InspectorView side-by-side layout component",
-      "files": [
-        "src/components/InspectorView.tsx"
+        "src/utils/format.ts"
       ],
       "status": "generated",
       "repairAttempts": 0,
@@ -122,19 +102,52 @@
       "note": ""
     },
     {
-      "taskId": "inspector-view-test",
-      "title": "Create tests for Vehicle Inspector",
+      "taskId": "car-detail-component",
+      "title": "Create CarDetail component for full record and error handling",
       "files": [
-        "src/__tests__/InspectorView.test.tsx"
+        "src/components/CarDetail.tsx"
+      ],
+      "status": "generated",
+      "repairAttempts": 0,
+      "unresolved": [],
+      "note": ""
+    },
+    {
+      "taskId": "car-list-component",
+      "title": "Create CarList component with keyboard navigation and truncation",
+      "files": [
+        "src/components/CarList.tsx"
       ],
       "status": "repaired",
-      "repairAttempts": 2,
+      "repairAttempts": 1,
       "unresolved": [],
-      "note": "repaired after failing tests (round 1)"
+      "note": "compiled after 1 repair attempt(s)"
+    },
+    {
+      "taskId": "inspector-app",
+      "title": "Create VehicleInspector main view component",
+      "files": [
+        "src/components/VehicleInspector.tsx"
+      ],
+      "status": "generated",
+      "repairAttempts": 0,
+      "unresolved": [],
+      "note": ""
+    },
+    {
+      "taskId": "car-list-test",
+      "title": "Test CarList navigation and truncation",
+      "files": [
+        "src/__tests__/CarList.test.tsx"
+      ],
+      "status": "repaired",
+      "repairAttempts": 1,
+      "unresolved": [],
+      "note": "compiled after 1 repair attempt(s)"
     },
     {
       "taskId": "app-shell",
-      "title": "Compose InspectorView into app shell",
+      "title": "Mount VehicleInspector in App.tsx",
       "files": [
         "src/App.tsx"
       ],
@@ -142,86 +155,112 @@
       "repairAttempts": 0,
       "unresolved": [],
       "note": ""
+    },
+    {
+      "taskId": "vehicle-inspector-test",
+      "title": "Test VehicleInspector integration and error states",
+      "files": [
+        "src/__tests__/VehicleInspector.test.tsx"
+      ],
+      "status": "repaired",
+      "repairAttempts": 1,
+      "unresolved": [],
+      "note": "repaired after failing tests (round 1)"
     }
   ],
   "review": {
-    "assessment": "The application fully satisfies all core requirements and optional features specified in the prompt. The architecture cleanly separates data access into custom hooks, implements robust keyboard navigation and error handling, and includes comprehensive tests covering all critical paths.",
+    "assessment": "The application is exceptionally well-built and fully satisfies all required and optional specifications. All data access is correctly isolated in hooks, and tests thoroughly verify the required behaviors.",
     "downgraded": [],
+    "prohibitions": [
+      {
+        "id": "no-modifications",
+        "text": "Do not build any form, dialog, or control that adds, edits, or removes a vehicle."
+      },
+      {
+        "id": "no-search-filtering",
+        "text": "Do not build search, filtering, or sorting for the list."
+      },
+      {
+        "id": "no-images",
+        "text": "Do not display images of any kind."
+      }
+    ],
+    "breaches": [],
     "findings": [
       {
-        "requirementId": "master-list-and-detail-panel",
+        "requirementId": "master-list-and-detail",
         "status": "satisfied",
-        "evidence": "src/components/InspectorView.tsx implements a side-by-side layout with VehicleList on the left and VehicleDetail on the right. VehicleDetail shows 'Select a vehicle to inspect' when selectedId is null.",
+        "evidence": "src/components/VehicleInspector.tsx and CarList render a compact list on the left with year, make, and model, and a detail panel on the right with no selection initially.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "fetch-selected-vehicle-individually",
+        "requirementId": "fetch-single-vehicle",
         "status": "satisfied",
-        "evidence": "src/hooks/useCar.ts uses useLazyQuery with GET_CAR to request the vehicle by id independently when selectedId changes.",
+        "evidence": "src/hooks/useCar.ts uses useLazyQuery with GET_CAR to fetch the selected vehicle individually by ID.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "handle-unavailable-vehicle",
+        "requirementId": "handle-fetch-error",
         "status": "satisfied",
-        "evidence": "src/components/VehicleDetail.tsx renders 'Vehicle unavailable' along with error.message when an error occurs, while the list remains rendered and usable in InspectorView.",
+        "evidence": "src/components/CarDetail.tsx renders 'Vehicle unavailable' and the error message when fetch fails, while the list remains rendered and usable.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "keyboard-navigation",
         "status": "satisfied",
-        "evidence": "src/components/VehicleList.tsx implements handleKeyDown handling ArrowUp, ArrowDown, wrapping, Enter for refetching, tabIndex={0} for keyboard reachability, and distinct focus styling for focused vs selected rows.",
+        "evidence": "src/components/CarList.tsx handles ArrowDown/ArrowUp with wrapping, Enter for re-fetch, distinct visual focus vs selection, and tabIndex={0} for keyboard reachability.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "truncate-long-descriptions",
+        "requirementId": "truncate-descriptions",
         "status": "satisfied",
-        "evidence": "src/components/VehicleList.tsx implements truncateText cutting at 22 characters and appending '…' when combined make and model exceeds 22 characters.",
+        "evidence": "src/utils/format.ts implements truncateMakeModel truncating combined make and model at 22 chars with an ellipsis, while detail panel shows full untruncated values.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "show-colour-as-text",
+        "requirementId": "color-as-text",
         "status": "satisfied",
-        "evidence": "src/components/VehicleDetail.tsx displays car.color as legible text inside a Typography component.",
+        "evidence": "src/components/CarDetail.tsx and CarList.tsx render color as text strings (e.g., {selectedCar.color}).",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "keep-data-access-in-hooks",
+        "requirementId": "hooks-isolation",
         "status": "satisfied",
-        "evidence": "src/hooks/useCars.ts and src/hooks/useCar.ts encapsulate all Apollo Client queries, keeping components free of direct data fetching logic.",
+        "evidence": "src/hooks/useCars.ts and src/hooks/useCar.ts isolate data access, with no direct GraphQL calls in components.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "tests",
+        "requirementId": "tests-coverage",
         "status": "satisfied",
-        "evidence": "src/__tests__/InspectorView.test.tsx covers list rendering, single-vehicle selection request, error handling without list emptying, arrow key movement and wrapping, and name truncation vs detail panel.",
+        "evidence": "src/__tests__/CarList.test.tsx and src/__tests__/VehicleInspector.test.tsx cover all required scenarios.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "lookup-duration",
         "status": "satisfied",
-        "evidence": "src/hooks/useCar.ts and src/components/VehicleDetail.tsx track and display lookup duration in milliseconds.",
+        "evidence": "src/components/CarDetail.tsx displays 'Lookup took {durationMs} ms'.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "home-end-keys",
         "status": "satisfied",
-        "evidence": "src/components/VehicleList.tsx implements Home and End keys to jump to the first and last vehicle.",
+        "evidence": "src/components/CarList.tsx implements Home and End key handlers to jump to first and last vehicle.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "copy-to-clipboard",
+        "requirementId": "clipboard-copy",
         "status": "satisfied",
-        "evidence": "src/components/VehicleDetail.tsx implements a button that copies the selected vehicle's details to the clipboard.",
+        "evidence": "src/components/CarDetail.tsx implements clipboard copying via a button.",
         "remediationTitle": "",
         "remediationFiles": []
       }

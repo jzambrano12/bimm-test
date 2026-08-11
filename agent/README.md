@@ -152,6 +152,30 @@ run leaves nothing. What the agent owes in exchange is an honest account, so
 `report.json` carries the outstanding diagnostics per task and the process exits
 non-zero when anything is unfinished.
 
+### A prohibition is a requirement too
+
+Specifications say what not to build, and for a while nothing here could hold
+that. Running `detail-inspector.spec.md` — whose out-of-scope section forbids
+images — produced an app rendering one, and the reviewer scored it 11 of 11
+satisfied. The reviewer was right: it judges the requirements it is given, and no
+prohibition was among them, because the schema had nowhere to put one. The planner
+had silently dropped the whole section.
+
+Prohibitions are now extracted, carried into every generation and repair prompt,
+and given a verdict each by the reviewer, with breaches routed through the same
+remediation path as any other finding. The same spec now yields three
+prohibitions and none breached.
+
+Two details cost something to learn. The prohibition block is **not** scoped to
+the task the way requirements are: the image appeared in a detail panel whose own
+task said nothing about images, so which file will reach for a forbidden thing is
+not predictable. And the reviewer is told explicitly not to excuse a breach for
+being useful or conventional, because that is precisely how this one arrived — an
+image in a vehicle detail view is the obvious thing to add.
+
+The general lesson is the one worth keeping: **anything the pipeline cannot
+represent, it cannot enforce.**
+
 ### Every model output is verified, including the reviewer's
 
 This is the through-line. Plans are checked for cycles and ownership conflicts.
