@@ -1,5 +1,5 @@
 import { Card, CardContent, Typography } from "@mui/material";
-import { CarImage } from "@/components/CarImage";
+import { ResponsiveCarImage } from "@/components/ResponsiveCarImage";
 import type { Car } from "@/types";
 
 export interface CarCardProps {
@@ -7,22 +7,20 @@ export interface CarCardProps {
 }
 
 export function CarCard({ car }: CarCardProps) {
-  const altText = `${car.year} ${car.make} ${car.model}`;
-
   return (
     <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <CarImage
+      <ResponsiveCarImage
         mobile={car.mobile}
         tablet={car.tablet}
         desktop={car.desktop}
-        alt={altText}
+        alt={`${car.year} ${car.make} ${car.model}`}
       />
       <CardContent sx={{ flexGrow: 1 }}>
-        <Typography variant="h6" component="div" gutterBottom>
-          {altText}
+        <Typography variant="h6" gutterBottom>
+          {car.year} {car.make} {car.model}
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          Color: {car.color}
+          Colour: {car.color}
         </Typography>
       </CardContent>
     </Card>

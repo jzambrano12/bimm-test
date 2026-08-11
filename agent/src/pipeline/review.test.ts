@@ -142,6 +142,25 @@ describe("auditFindings", () => {
    * The exact verdict a real run produced: "satisfied" on a component using its
    * UI library's 600px/900px defaults, with evidence that named no number.
    */
+  it("downgrades a satisfied verdict that cites only some of the stated values", () => {
+    // One threshold does not vouch for four, especially when it also appears in
+    // an unrelated placeholder image URL.
+    const { findings, downgraded } = auditFindings(
+      [
+        finding({
+          requirementId: "responsive",
+          status: "satisfied",
+          evidence: "Images are 640x360 placeholders selected by breakpoint.",
+          remediationTitle: "",
+          remediationFiles: [],
+        }),
+      ],
+      requirements,
+    );
+    expect(findings[0]?.status).toBe("partial");
+    expect(downgraded).toEqual(["responsive"]);
+  });
+
   it("downgrades a satisfied verdict whose evidence cites none of the stated values", () => {
     const { findings, downgraded } = auditFindings(
       [
@@ -168,7 +187,8 @@ describe("auditFindings", () => {
         finding({
           requirementId: "responsive",
           status: "satisfied",
-          evidence: "CarCard.tsx uses (max-width: 640px) and (min-width: 1024px), matching the spec.",
+          evidence:
+            "CarCard.tsx uses (max-width: 640px), (min-width: 641px), (max-width: 1023px) and (min-width: 1024px).",
         }),
       ],
       requirements,

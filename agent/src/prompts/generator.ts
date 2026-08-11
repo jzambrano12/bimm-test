@@ -38,9 +38,14 @@ STACK IDIOM
 - After a mutation changes a collection, make the change visible — refetch the
   affected query or update the cache. A form that succeeds silently and leaves
   a stale list on screen is a defect.
-- Reacting to viewport size: use the UI library's media-query hook rather than
-  a hand-rolled window resize listener. It re-renders on change and behaves in
-  a jsdom test; a manual listener usually does neither.
+- Reacting to viewport size: use the UI library's media-query hook rather than a
+  hand-rolled window resize listener — it re-renders on change and behaves in a
+  jsdom test, where a manual listener usually does neither. But pass the exact
+  thresholds the requirement states, written as explicit media query strings. Do
+  not use the library's named breakpoint aliases: those carry the library's own
+  default pixel values, which will not match the specification unless it happens
+  to agree with them, and the mismatch compiles and passes tests while serving
+  the wrong thing.
 - Components that receive data as props hold no fetching logic. Keep data access
   in hooks and presentation in components.
 - Tests: render with Testing Library and query by role, label or visible text —

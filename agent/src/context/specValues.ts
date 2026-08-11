@@ -18,7 +18,14 @@ export function extractStatedValues(text: string): string[] {
   return [...new Set(text.match(STATED_VALUE) ?? [])];
 }
 
-/** True when `text` mentions at least one of `values`. */
-export function citesAnyValue(text: string, values: readonly string[]): boolean {
-  return values.some((value) => text.includes(value));
+/**
+ * True when `text` mentions every one of `values`.
+ *
+ * All, not any, and for a concrete reason: a requirement naming 640, 641, 1023
+ * and 1024 was vouched for by evidence that mentioned only 640 — which had
+ * appeared incidentally, in a placeholder image URL of 640x360. Citing one
+ * threshold establishes nothing about the other three.
+ */
+export function citesAllValues(text: string, values: readonly string[]): boolean {
+  return values.length > 0 && values.every((value) => text.includes(value));
 }

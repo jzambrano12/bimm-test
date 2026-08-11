@@ -8,7 +8,7 @@ import {
   type ReviewFinding,
   type SpecRequirement,
 } from "../schemas.ts";
-import { citesAnyValue, extractStatedValues } from "../context/specValues.ts";
+import { citesAllValues, extractStatedValues } from "../context/specValues.ts";
 import { checkWritable } from "../tools/fs.ts";
 import type { GenerationContext } from "./generate.ts";
 import type { OrderedPlan } from "./plan.ts";
@@ -106,8 +106,10 @@ export async function reviewBuild(
  * either way.
  *
  * So: when a requirement states specific values and a finding claims
- * `satisfied` without citing any of them, the claim is unsupported and is
- * downgraded to `partial`. This holds regardless of which model reviewed, which
+ * `satisfied` without citing every one of them, the claim is unsupported and is
+ * downgraded to `partial`. All rather than any, because a later run was vouched
+ * for by evidence citing a single threshold that had appeared incidentally in a
+ * placeholder image URL. This holds regardless of which model reviewed, which
  * matters because review quality varies most across model tiers.
  */
 export function auditFindings(
@@ -125,7 +127,7 @@ export function auditFindings(
 
     const stated = extractStatedValues(requirementText);
     if (stated.length === 0) return finding;
-    if (citesAnyValue(finding.evidence, stated)) return finding;
+    if (citesAllValues(finding.evidence, stated)) return finding;
 
     downgraded.push(finding.requirementId);
     return {
@@ -133,8 +135,8 @@ export function auditFindings(
       status: "partial",
       evidence:
         `${finding.evidence} [Downgraded automatically: the requirement states ` +
-        `${stated.join(", ")}, and this evidence cites none of those values, so the ` +
-        `claim that they are implemented is unsupported.]`,
+        `${stated.join(", ")}, and this evidence does not cite all of them, so the ` +
+        `claim that every stated value is implemented is unsupported.]`,
       remediationTitle:
         finding.remediationTitle === ""
           ? `Use the exact values the specification states (${stated.join(", ")})`

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { citesAnyValue, extractStatedValues } from "./specValues.ts";
+import { citesAllValues, extractStatedValues } from "./specValues.ts";
 
 describe("extractStatedValues", () => {
   /**
@@ -33,16 +33,25 @@ describe("extractStatedValues", () => {
   });
 });
 
-describe("citesAnyValue", () => {
-  it("is true when the text mentions one of the values", () => {
-    expect(citesAnyValue("uses (min-width: 1024px)", ["640", "1024"])).toBe(true);
+describe("citesAllValues", () => {
+  it("is true when every value appears", () => {
+    expect(citesAllValues("(max-width: 640px) and (min-width: 1024px)", ["640", "1024"])).toBe(true);
   });
 
-  it("is false when the text mentions none of them", () => {
-    expect(citesAnyValue("uses theme breakpoints", ["640", "1024"])).toBe(false);
+  /**
+   * The case that motivated requiring all: a reviewer vouched for four
+   * thresholds by citing one, and that one had appeared incidentally in a
+   * placeholder image URL of 640x360.
+   */
+  it("is false when only some values appear", () => {
+    expect(citesAllValues("image is 640x360", ["640", "641", "1023", "1024"])).toBe(false);
   });
 
-  it("is false for an empty value list", () => {
-    expect(citesAnyValue("anything", [])).toBe(false);
+  it("is false when none appear", () => {
+    expect(citesAllValues("uses theme breakpoints", ["640", "1024"])).toBe(false);
+  });
+
+  it("is false for an empty value list, so it never vouches vacuously", () => {
+    expect(citesAllValues("anything", [])).toBe(false);
   });
 });
