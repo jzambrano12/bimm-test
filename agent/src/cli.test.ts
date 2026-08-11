@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseArgs, UsageError } from "./cli.ts";
+import { parseArgs, specSuggestions, UsageError } from "./cli.ts";
 import { boilerplateRoot } from "./tools/scaffold.ts";
 
 describe("parseArgs", () => {
@@ -78,5 +78,36 @@ describe("parseArgs", () => {
     const parsed = parseArgs(["--spec", "s.md"], agentDir);
     expect(parsed?.maxRepairsOverride).toBeUndefined();
     expect(parsed?.concurrencyOverride).toBeUndefined();
+  });
+});
+
+describe("specSuggestions", () => {
+  const root = boilerplateRoot();
+
+  /**
+   * The mistake two entry points invite, hit twice in practice:
+   * `./agent/specs/x.md` is correct from the repository root and one level too
+   * deep from inside agent/. The agent can see which reading exists, so it says
+   * so rather than printing a path and stopping.
+   */
+  it("suggests the shallower path when agent/ was doubled", () => {
+    const doubled = join(root, "agent", "agent", "specs", "car-inventory.spec.md");
+    expect(specSuggestions(doubled)).toContain(
+      join(root, "agent", "specs", "car-inventory.spec.md"),
+    );
+  });
+
+  it("finds a spec by name when the directory was wrong", () => {
+    const wrongDir = join(root, "specs", "variant.spec.md");
+    expect(specSuggestions(wrongDir)).toContain(join(root, "agent", "specs", "variant.spec.md"));
+  });
+
+  it("suggests nothing for a spec that genuinely does not exist", () => {
+    expect(specSuggestions(join(root, "agent", "specs", "invented.spec.md"))).toEqual([]);
+  });
+
+  it("never suggests the path that was already tried", () => {
+    const real = join(root, "agent", "specs", "car-inventory.spec.md");
+    expect(specSuggestions(real)).not.toContain(real);
   });
 });

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
+import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { join, resolve } from "node:path";
+import { basename, join, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig, ConfigError } from "./config.ts";
 import { ArtifactRegistry } from "./context/artifacts.ts";
@@ -35,12 +36,44 @@ function log(label: string, detail: string): void {
   process.stderr.write(`  ${label.padEnd(14)} ${detail}\n`);
 }
 
+/**
+ * Paths that the user probably meant.
+ *
+ * With two valid entry points, mixing up their relative forms is the easy
+ * mistake: `./agent/specs/x.md` is right from the repository root and wrong from
+ * inside agent/, where it resolves one level too deep. The agent can see which
+ * interpretation exists, so it says so instead of reporting a path and stopping.
+ */
+export function specSuggestions(requested: string): string[] {
+  const root = boilerplateRoot();
+  const name = basename(requested);
+
+  const candidates = [
+    // The same path read from the other entry point.
+    requested.replace(`${sep}agent${sep}agent${sep}`, `${sep}agent${sep}`),
+    join(root, "agent", "specs", name),
+    join(root, "agent", name),
+  ];
+
+  return [...new Set(candidates)].filter(
+    (candidate) => candidate !== requested && existsSync(candidate),
+  );
+}
+
 async function readSpec(path: string): Promise<string> {
   let raw: string;
   try {
     raw = await readFile(path, "utf8");
   } catch {
-    throw new UsageError(`Cannot read spec file: ${path}`);
+    const suggestions = specSuggestions(path);
+    throw new UsageError(
+      `Cannot read spec file: ${path}` +
+        (suggestions.length === 0
+          ? ""
+          : `\n\nDid you mean one of these? Relative paths are resolved from the ` +
+            `directory you ran the command in.\n` +
+            suggestions.map((candidate) => `  ${candidate}`).join("\n")),
+    );
   }
 
   if (raw.trim() === "") {
@@ -62,7 +95,8 @@ REQUIRED
   --spec <file>          Natural-language specification to implement.
 
 OPTIONS
-  --output <dir>         Where to generate the app. Default: ../generated-app
+  --output <dir>         Where to generate the app.
+                         Default: generated-app/ beside the boilerplate.
   --dry-run              Plan only: print the task DAG and exit without generating.
   --resume               Reuse an existing output directory instead of re-scaffolding.
   --max-repairs <n>      Repair attempts per task before marking it degraded. Default: 3
