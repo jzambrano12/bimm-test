@@ -49,12 +49,22 @@ function readOptional(name: string): string | undefined {
 }
 
 /**
- * Key resolution is ordered, not exclusive: the agent's default provider is
- * Gemini, but pointing LLM_BASE_URL at any OpenAI-compatible API and supplying
- * OPENAI_API_KEY works without touching code. That keeps the demo runnable for
- * a reviewer who only has one kind of key.
+ * Key resolution, with an explicit override first.
+ *
+ * `LLM_API_KEY` exists because the ordered fallback has a sharp edge. A reviewer
+ * with a Gemini key already in .env who points LLM_BASE_URL at another provider
+ * would otherwise have their Gemini key sent to that provider — the order picks
+ * GEMINI_API_KEY, which is still set, and the request fails with a confusing 401
+ * about a key they never intended to use.
+ *
+ * Guessing the provider from the base URL would be worse: it works until someone
+ * uses a proxy or a self-hosted gateway. So the override is explicit, and the
+ * documented way to switch providers is to set it.
  */
 function resolveApiKey(): string {
+  const explicit = readOptional("LLM_API_KEY");
+  if (explicit !== undefined) return explicit;
+
   const candidates = ["GEMINI_API_KEY", "GOOGLE_API_KEY", "OPENAI_API_KEY"] as const;
 
   for (const name of candidates) {
@@ -63,8 +73,10 @@ function resolveApiKey(): string {
   }
 
   throw new ConfigError(
-    `No API key found. Set one of ${candidates.join(", ")} in agent/.env ` +
-      `(copy agent/.env.example). A free Gemini key: https://aistudio.google.com/apikey`,
+    `No API key found. Set GEMINI_API_KEY in agent/.env (copy agent/.env.example) — ` +
+      `a free key: https://aistudio.google.com/apikey\n` +
+      `For a different provider, set LLM_API_KEY together with LLM_BASE_URL and LLM_MODEL. ` +
+      `Without an explicit LLM_API_KEY the order is ${candidates.join(" -> ")}.`,
   );
 }
 

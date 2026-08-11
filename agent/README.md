@@ -153,9 +153,20 @@ evidence that named no number at all.
 
 Gemini through Google's OpenAI-compatible endpoint, driven by the `openai` SDK.
 One SDK covers any compatible provider, so the compatibility layer *is* the
-abstraction and there is no vendor wrapper of my own to maintain. Point
-`LLM_BASE_URL` at another provider and the agent runs unchanged — which also
-means a reviewer holding only an OpenAI key can run the demo.
+abstraction and there is no vendor wrapper of my own to maintain. A reviewer
+holding an OpenAI key rather than a Gemini one runs the agent unchanged with
+three environment variables:
+
+```bash
+LLM_BASE_URL=https://api.openai.com/v1  LLM_API_KEY=sk-...  LLM_MODEL=gpt-5-mini
+```
+
+`LLM_API_KEY` takes priority over the provider-specific names deliberately.
+Testing this path found the edge it exists for: with a Gemini key already in
+`.env`, the ordered fallback picked it up and sent it to OpenAI, producing a 401
+about a key the caller never chose. Inferring the provider from the base URL
+would have been worse — it breaks the moment someone uses a proxy or a gateway —
+so the override is explicit.
 
 Model ids are resolved from the live `/models` catalogue rather than hardcoded,
 and that decision paid for itself twice:
