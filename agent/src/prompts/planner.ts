@@ -51,6 +51,16 @@ Rules, all of which are enforced mechanically after you answer:
 - Do not create tasks for anything the project contract says already exists.
 - \`exports\` names the symbols the file will export, so dependent tasks can
   import them without guessing. Be exact.
+- \`exportedInterface\` is the signature those symbols will have, written as
+  TypeScript declarations with no bodies: hook return types, component prop
+  types, exported type aliases. This is the single most consequential field you
+  produce. Every consumer of this task is given it verbatim and codes against
+  it, so a vague or absent interface guarantees that the producer and its
+  consumers will invent different shapes and fail to compile. Decide the
+  boundary here, deliberately, the way a tech lead would before splitting work
+  between two people. Prefer one obvious calling convention over an interface
+  that tries to accommodate several — a hook with four overloads is a planning
+  failure, not flexibility.
 - \`satisfies\` cites the requirement ids from step 1 that the task advances.
   Every required requirement must be cited by at least one task.
 - \`acceptanceCriteria\` are observable conditions, not restatements of the
@@ -83,6 +93,7 @@ A well-formed plan for that excerpt:
       "targetFiles": ["src/hooks/useBooks.ts"],
       "dependsOn": [],
       "exports": ["useBooks"],
+      "exportedInterface": "export interface UseBooksResult { books: Book[]; loading: boolean; error?: Error }\\nexport function useBooks(): UseBooksResult",
       "satisfies": ["list-books"],
       "acceptanceCriteria": ["Returns { books, loading, error }", "Uses the existing GetBooks document"]
     },
@@ -93,6 +104,7 @@ A well-formed plan for that excerpt:
       "targetFiles": ["src/components/BookRow.tsx"],
       "dependsOn": [],
       "exports": ["BookRow"],
+      "exportedInterface": "export interface BookRowProps { book: Book }\\nexport function BookRow(props: BookRowProps): JSX.Element",
       "satisfies": ["list-books", "show-page-count"],
       "acceptanceCriteria": ["Takes a single book as a prop", "Renders title and page count", "Holds no data-fetching logic"]
     },
@@ -103,6 +115,7 @@ A well-formed plan for that excerpt:
       "targetFiles": ["src/components/BookList.tsx"],
       "dependsOn": ["use-books-hook", "book-row"],
       "exports": ["BookList"],
+      "exportedInterface": "export interface BookListProps { books: Book[]; loading: boolean; titleFilter: string; onTitleFilterChange: (value: string) => void }\\nexport function BookList(props: BookListProps): JSX.Element",
       "satisfies": ["list-books", "filter-by-title"],
       "acceptanceCriteria": ["Renders one BookRow per book", "Filters case-insensitively as the user types", "Shows a loading indicator while the query is in flight"]
     },
@@ -113,6 +126,7 @@ A well-formed plan for that excerpt:
       "targetFiles": ["src/__tests__/BookList.test.tsx"],
       "dependsOn": ["book-list"],
       "exports": [],
+      "exportedInterface": "",
       "satisfies": ["filter-by-title"],
       "acceptanceCriteria": ["Asserts only matching titles remain after typing", "Mocks the GraphQL layer rather than the network"]
     },
@@ -123,6 +137,7 @@ A well-formed plan for that excerpt:
       "targetFiles": ["src/App.tsx"],
       "dependsOn": ["book-list"],
       "exports": ["default"],
+      "exportedInterface": "export default function App(): JSX.Element",
       "satisfies": ["list-books"],
       "acceptanceCriteria": ["Renders BookList inside the existing layout", "Adds no data fetching of its own"]
     }

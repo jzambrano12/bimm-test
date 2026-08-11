@@ -24,6 +24,14 @@ export interface ResolvedModels {
   readonly planner: string;
   /** Whether the worker model was auto-selected rather than configured. */
   readonly workerAutoSelected: boolean;
+  /**
+   * Cheaper models in this key's catalog, for the quota-exhausted path.
+   *
+   * Free tiers meter each model separately, so an exhausted flash quota
+   * usually leaves flash-lite untouched. Naming the specific alternatives this
+   * key can actually reach turns a dead end into one copy-pasteable env var.
+   */
+  readonly lighterAlternatives: readonly string[];
 }
 
 export class ModelResolutionError extends Error {}
@@ -116,5 +124,14 @@ export async function resolveModels(client: OpenAI, config: AgentConfig): Promis
       ? worker
       : assertAvailable(config.plannerModel, catalog, "LLM_PLANNER_MODEL");
 
-  return { worker, planner, workerAutoSelected: config.model === undefined };
+  const lighterAlternatives = catalog.filter(
+    (id) => /lite/i.test(id) && !NOT_A_TEXT_MODEL.test(id) && id !== worker,
+  );
+
+  return {
+    worker,
+    planner,
+    workerAutoSelected: config.model === undefined,
+    lighterAlternatives,
+  };
 }

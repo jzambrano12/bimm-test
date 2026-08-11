@@ -43,6 +43,23 @@ export const PlannedTask = z.object({
   exports: z
     .array(z.string())
     .describe("Symbols this task will export, so dependent tasks can import them"),
+  /**
+   * The signature, decided at planning time rather than discovered at
+   * generation time.
+   *
+   * Naming a symbol is not enough to make two independently generated files
+   * agree: the producer invents a shape, every consumer invents a different
+   * one, and the mismatch only surfaces at typecheck. Committing to the
+   * interface in the plan makes it a design decision the generator implements
+   * on both sides of the boundary.
+   */
+  exportedInterface: z
+    .string()
+    .describe(
+      "Exact TypeScript declarations this task must export — signatures and prop types, " +
+        "no bodies. Consumers are given this verbatim and will code against it. " +
+        "Empty string only if the task exports nothing.",
+    ),
   satisfies: z.array(z.string()).describe("SpecRequirement ids this task contributes to"),
   acceptanceCriteria: z
     .array(z.string())

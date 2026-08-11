@@ -56,6 +56,7 @@ describe("TaskPlan validation", () => {
         targetFiles: ["src/hooks/useCars.ts"],
         dependsOn: [],
         exports: ["useCars"],
+        exportedInterface: "export function useCars(): { cars: Car[]; loading: boolean }",
         satisfies: ["list-cars"],
         acceptanceCriteria: ["Returns cars, loading and error"],
       },

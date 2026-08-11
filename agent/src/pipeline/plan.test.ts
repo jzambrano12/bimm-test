@@ -9,6 +9,7 @@ function task(overrides: Partial<PlannedTask> & { id: string }): PlannedTask {
     targetFiles: [`src/components/${overrides.id}.tsx`],
     dependsOn: [],
     exports: [overrides.id],
+    exportedInterface: `export function ${overrides.id}(): JSX.Element`,
     satisfies: ["req-a"],
     acceptanceCriteria: ["renders"],
     ...overrides,

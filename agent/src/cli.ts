@@ -2,15 +2,29 @@
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadConfig, ConfigError } from "./config.ts";
-import { buildContractDigest, ContractError, renderContract } from "./context/repoMap.ts";
+import { ArtifactRegistry } from "./context/artifacts.ts";
+import {
+  buildContractDigest,
+  ContractError,
+  renderContract,
+  renderStyleReference,
+} from "./context/repoMap.ts";
 import { createLlmClient, resolveModels, ModelResolutionError } from "./llm/client.ts";
 import { LlmError } from "./llm/complete.ts";
 import { StructuredOutputError } from "./llm/structured.ts";
 import { UsageLedger } from "./llm/usage.ts";
+import { generateTask, GenerationContractError } from "./pipeline/generate.ts";
 import { createPlan, PlanValidationError, renderPlan } from "./pipeline/plan.ts";
+import { ProjectFs, SandboxViolationError } from "./tools/fs.ts";
 import { boilerplateRoot, scaffold, ScaffoldError } from "./tools/scaffold.ts";
 
 const ledger = new UsageLedger();
+
+/**
+ * Lighter models this key can reach, captured at preflight so the quota-exhausted
+ * error path can name concrete alternatives instead of shrugging.
+ */
+let quotaFallbacks: readonly string[] = [];
 
 /** Progress goes to stderr so stdout stays the plan and the report. */
 function log(label: string, detail: string): void {
@@ -170,6 +184,7 @@ async function main(): Promise<number> {
   // model in one cheap request, so a bad key fails in two seconds rather than
   // halfway through a run that has already written files.
   const models = await resolveModels(client, config);
+  quotaFallbacks = models.lighterAlternatives;
   const sourceRoot = boilerplateRoot();
 
   log("provider", config.baseUrl);
@@ -214,7 +229,33 @@ async function main(): Promise<number> {
           `${scaffolded.nodeModulesPreserved ? " (node_modules preserved)" : ""}`,
   );
 
-  // Generation lands with the executor (ticket 8).
+  const registry = new ArtifactRegistry();
+  const context = {
+    model: models.worker,
+    contract,
+    styleReference: renderStyleReference(digest),
+    requirements: ordered.plan.requirements,
+    tasksById: new Map(ordered.plan.tasks.map((task) => [task.id, task])),
+    registry,
+    fs: new ProjectFs(options.outputDir),
+  };
+
+  process.stderr.write("\n");
+  for (const [index, level] of ordered.levels.entries()) {
+    for (const task of level) {
+      const files = await generateTask(client, ledger, context, task);
+      log(`level ${index + 1}`, `${task.id} → ${files.map((file) => file.path).join(", ")}`);
+    }
+  }
+
+  const { totals, byPhase } = ledger.snapshot();
+  process.stdout.write(
+    `\ngenerated ${registry.paths().length} files with ${totals.calls} LLM call(s)\n` +
+      `  plan:     ${byPhase.plan.promptTokens + byPhase.plan.completionTokens} tokens\n` +
+      `  generate: ${byPhase.generate.promptTokens + byPhase.generate.completionTokens} tokens\n`,
+  );
+
+  // Validation and repair land next (tickets 9 and 10).
   return 0;
 }
 
@@ -239,8 +280,23 @@ const exitCode = await main().catch((error: unknown) => {
     process.stderr.write(`scaffold error: ${error.message}\n`);
     return 73; // EX_CANTCREAT
   }
+  if (error instanceof GenerationContractError || error instanceof SandboxViolationError) {
+    process.stderr.write(`generation error: ${error.message}\n`);
+    return 65; // EX_DATAERR
+  }
   if (error instanceof LlmError) {
     process.stderr.write(`provider error: ${error.message}\n`);
+
+    // Free tiers meter each model separately, so an exhausted quota on one
+    // model usually leaves a lighter sibling untouched. Suggesting the exact
+    // ids this key can reach beats telling the user to go read a dashboard.
+    if (!error.retryable && quotaFallbacks.length > 0) {
+      process.stderr.write(
+        `\nModels in your catalog with separate quota — retry with one of:\n` +
+          quotaFallbacks.map((id) => `  LLM_MODEL=${id}`).join("\n") +
+          `\n\nProgress is not lost: re-run with --resume to keep the generated app.\n`,
+      );
+    }
     return 69; // EX_UNAVAILABLE
   }
   process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
