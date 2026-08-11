@@ -54,6 +54,19 @@ STACK IDIOM
   not by stubbing fetch. Assert observable behaviour, not implementation detail.
 - Tests must be deterministic: await what is asynchronous, and never assert on
   wall-clock timing.
+- A page-wide role query collects matches from every section, so an
+  index-based assertion on its result can read an element from somewhere else
+  entirely — a form's heading rather than the first list item, for instance.
+  When a role repeats across regions, scope the query to the container you mean
+  before indexing into it, and give containers an accessible name or landmark
+  role so they can be scoped to.
+- When a component composes several fields into one string, no text node equals
+  any single field on its own. Querying for one exact field then finds nothing,
+  even though it is on screen. Assert with a substring or regular-expression
+  matcher, or query the composed text the component actually renders. The
+  testing library says "the text is broken up by multiple elements" when this
+  happens; read that as a matcher problem in the test, not a missing element in
+  the component.
 - A mocked GraphQL provider consumes each mock exactly once. If the code under
   test refetches a query after a mutation — which correct code does, so that the
   change becomes visible — that query needs a second mock entry, and the second
