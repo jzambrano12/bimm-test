@@ -303,6 +303,14 @@ async function runReviewPhase(
       (review.truncated ? " (source listing truncated)" : ""),
   );
 
+  if (review.downgraded.length > 0) {
+    options.onProgress(
+      "review",
+      `downgraded ${review.downgraded.join(", ")}: claimed satisfied without citing the ` +
+        `specification's stated values`,
+    );
+  }
+
   for (const { finding, reason } of review.unroutable) {
     options.onProgress("review", `${finding.requirementId}: ${reason}`);
   }

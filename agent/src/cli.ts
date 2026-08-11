@@ -291,6 +291,12 @@ async function main(): Promise<number> {
       `  ${review.assessment}`,
     );
 
+    if (review.downgraded.length > 0) {
+      report.push(
+        `  audit: downgraded ${review.downgraded.join(", ")} — claimed satisfied without citing the spec's values`,
+      );
+    }
+
     const notSatisfied = review.findings.filter((finding) => finding.status !== "satisfied");
     if (notSatisfied.length > 0) {
       report.push("", "Requirements not fully met:");

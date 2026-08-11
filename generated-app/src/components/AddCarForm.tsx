@@ -1,106 +1,126 @@
 import { useState, type FormEvent } from "react";
 import {
   Box,
-  TextField,
   Button,
-  Alert,
-  Typography,
+  TextField,
   CircularProgress,
+  Alert,
+  Stack,
 } from "@mui/material";
-import { useAddCar } from "@/hooks/useCars";
 
 export interface AddCarFormProps {
-  onCarAdded?: () => void;
+  onAddCar: (input: {
+    make: string;
+    model: string;
+    year: number;
+    color: string;
+  }) => Promise<void>;
+  loading: boolean;
 }
 
-export function AddCarForm({ onCarAdded }: AddCarFormProps) {
+export function AddCarForm({ onAddCar, loading }: AddCarFormProps) {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
-  const [year, setYear] = useState("");
+  const [yearStr, setYearStr] = useState("");
   const [color, setColor] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
-  const { addCar, loading, error: mutationError } = useAddCar();
-
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setValidationError(null);
 
     const trimmedMake = make.trim();
     const trimmedModel = model.trim();
     const trimmedColor = color.trim();
-    const parsedYear = parseInt(year, 10);
 
-    if (!trimmedMake || !trimmedModel || !trimmedColor || !year) {
+    if (!trimmedMake || !trimmedModel || !yearStr.trim() || !trimmedColor) {
       setValidationError("All fields are required.");
       return;
     }
 
-    if (isNaN(parsedYear) || parsedYear < 1886 || parsedYear > new Date().getFullYear() + 1) {
-      setValidationError("Please enter a valid year.");
+    const parsedYear = Number(yearStr);
+    const currentYear = new Date().getFullYear() + 1;
+
+    if (Number.isNaN(parsedYear) || parsedYear < 1886 || parsedYear > currentYear) {
+      setValidationError(`Please enter a valid year between 1886 and ${currentYear}.`);
       return;
     }
 
     try {
-      await addCar({
+      await onAddCar({
         make: trimmedMake,
         model: trimmedModel,
         year: parsedYear,
         color: trimmedColor,
       });
-
       setMake("");
       setModel("");
-      setYear("");
+      setYearStr("");
       setColor("");
-      onCarAdded?.();
-    } catch (_err) {
-      // Mutation error is captured by useAddCar and displayed below
+    } catch (err) {
+      if (err instanceof Error) {
+        setValidationError(err.message);
+      } else {
+        setValidationError("An unexpected error occurred.");
+      }
     }
   };
 
   return (
-    <Box component="form" onSubmit={handleSubmit} sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 400, width: "100%" }}>
-      <Typography variant="h6">Add New Car</Typography>
-      {validationError && <Alert severity="error">{validationError}</Alert>}
-      {mutationError && <Alert severity="error">{mutationError.message}</Alert>}
-      <TextField
-        label="Make"
-        value={make}
-        onChange={(e) => setMake(e.target.value)}
-        disabled={loading}
-        required
-      />
-      <TextField
-        label="Model"
-        value={model}
-        onChange={(e) => setModel(e.target.value)}
-        disabled={loading}
-        required
-      />
-      <TextField
-        label="Year"
-        type="number"
-        value={year}
-        onChange={(e) => setYear(e.target.value)}
-        disabled={loading}
-        required
-      />
-      <TextField
-        label="Color"
-        value={color}
-        onChange={(e) => setColor(e.target.value)}
-        disabled={loading}
-        required
-      />
-      <Button
-        type="submit"
-        variant="contained"
-        disabled={loading}
-        startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}
-      >
-        {loading ? "Adding..." : "Add Car"}
-      </Button>
+    <Box component="form" onSubmit={handleSubmit} noValidate sx={{ mt: 2 }}>
+      <Stack spacing={2}>
+        {validationError && (
+          <Alert severity="error" onClose={() => setValidationError(null)}>
+            {validationError}
+          </Alert>
+        )}
+
+        <TextField
+          label="Make"
+          value={make}
+          onChange={(e) => setMake(e.target.value)}
+          disabled={loading}
+          fullWidth
+          required
+        />
+
+        <TextField
+          label="Model"
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          disabled={loading}
+          fullWidth
+          required
+        />
+
+        <TextField
+          label="Year"
+          type="number"
+          value={yearStr}
+          onChange={(e) => setYearStr(e.target.value)}
+          disabled={loading}
+          fullWidth
+          required
+        />
+
+        <TextField
+          label="Color"
+          value={color}
+          onChange={(e) => setColor(e.target.value)}
+          disabled={loading}
+          fullWidth
+          required
+        />
+
+        <Button
+          type="submit"
+          variant="contained"
+          disabled={loading}
+          startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}
+        >
+          {loading ? "Adding Car..." : "Add Car"}
+        </Button>
+      </Stack>
     </Box>
   );
 }

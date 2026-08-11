@@ -2,7 +2,12 @@ import type OpenAI from "openai";
 import { completeStructured } from "../llm/structured.ts";
 import type { UsageLedger } from "../llm/usage.ts";
 import { REVIEWER_SYSTEM, buildReviewerUser } from "../prompts/reviewer.ts";
-import { ReviewVerdict, type PlannedTask, type ReviewFinding } from "../schemas.ts";
+import {
+  ReviewVerdict,
+  type PlannedTask,
+  type ReviewFinding,
+  type SpecRequirement,
+} from "../schemas.ts";
 import { checkWritable } from "../tools/fs.ts";
 import type { GenerationContext } from "./generate.ts";
 import type { OrderedPlan } from "./plan.ts";
@@ -31,6 +36,8 @@ export interface ReviewOutcome {
   /** Findings with nowhere to route them, and why. */
   readonly unroutable: readonly { finding: ReviewFinding; reason: string }[];
   readonly truncated: boolean;
+  /** Requirement ids whose "satisfied" verdict its own evidence did not support. */
+  readonly downgraded: readonly string[];
 }
 
 /**
@@ -76,12 +83,70 @@ export async function reviewBuild(
     schemaName: "ReviewVerdict",
   });
 
+  const audited = auditFindings(verdict.findings, ordered.plan.requirements);
+
   return {
-    findings: verdict.findings,
+    findings: audited.findings,
     assessment: verdict.assessment,
     truncated,
-    ...routeFindings(verdict.findings, ordered),
+    downgraded: audited.downgraded,
+    ...routeFindings(audited.findings, ordered),
   };
+}
+
+/** Numbers worth comparing. Two digits or more, to skip counts like "3 tests". */
+const SPEC_VALUE = /\d{2,}/g;
+
+/**
+ * Checks the reviewer's verdicts against its own evidence.
+ *
+ * Every other model output in this agent is verified rather than trusted, and the
+ * reviewer was the exception — which showed. Asked to judge a requirement stating
+ * 640px and 1024px thresholds against a component using its UI library's 600px
+ * and 900px defaults, it returned "satisfied" with evidence that never mentioned
+ * a single number. The verdict was wrong and the evidence did not support it
+ * either way.
+ *
+ * So: when a requirement states specific values and a finding claims
+ * `satisfied` without citing any of them, the claim is unsupported and is
+ * downgraded to `partial`. This holds regardless of which model reviewed, which
+ * matters because review quality varies most across model tiers.
+ */
+export function auditFindings(
+  findings: readonly ReviewFinding[],
+  requirements: readonly SpecRequirement[],
+): { findings: ReviewFinding[]; downgraded: readonly string[] } {
+  const textOf = new Map(requirements.map((requirement) => [requirement.id, requirement.text]));
+  const downgraded: string[] = [];
+
+  const audited = findings.map((finding): ReviewFinding => {
+    if (finding.status !== "satisfied") return finding;
+
+    const requirementText = textOf.get(finding.requirementId);
+    if (requirementText === undefined) return finding;
+
+    const stated = [...new Set(requirementText.match(SPEC_VALUE) ?? [])];
+    if (stated.length === 0) return finding;
+
+    const cited = stated.filter((value) => finding.evidence.includes(value));
+    if (cited.length > 0) return finding;
+
+    downgraded.push(finding.requirementId);
+    return {
+      ...finding,
+      status: "partial",
+      evidence:
+        `${finding.evidence} [Downgraded automatically: the requirement states ` +
+        `${stated.join(", ")}, and this evidence cites none of those values, so the ` +
+        `claim that they are implemented is unsupported.]`,
+      remediationTitle:
+        finding.remediationTitle === ""
+          ? `Use the exact values the specification states (${stated.join(", ")})`
+          : finding.remediationTitle,
+    };
+  });
+
+  return { findings: audited, downgraded };
 }
 
 /**
@@ -124,12 +189,25 @@ export function routeFindings(
       continue;
     }
 
-    if (finding.remediationFiles.length === 0) {
-      unroutable.push({ finding, reason: "reviewer named no file to change" });
+    // A finding may name no file — either because the reviewer omitted it, or
+    // because an audited downgrade produced it. The plan already records which
+    // tasks serve which requirement, so the fix still has an owner.
+    const namedFiles =
+      finding.remediationFiles.length > 0
+        ? finding.remediationFiles
+        : ordered.plan.tasks
+            .filter((task) => task.satisfies.includes(finding.requirementId) && task.kind !== "test")
+            .flatMap((task) => task.targetFiles);
+
+    if (namedFiles.length === 0) {
+      unroutable.push({
+        finding,
+        reason: "no file named and no task claims this requirement",
+      });
       continue;
     }
 
-    const protectedTarget = finding.remediationFiles.find((file) => !checkWritable(file).allowed);
+    const protectedTarget = namedFiles.find((file) => !checkWritable(file).allowed);
     if (protectedTarget !== undefined) {
       unroutable.push({
         finding,
@@ -138,15 +216,12 @@ export function routeFindings(
       continue;
     }
 
-    const target = finding.remediationFiles
+    const target = namedFiles
       .map((file) => ownerOf.get(file))
       .find((task): task is PlannedTask => task !== undefined);
 
     if (target === undefined) {
-      unroutable.push({
-        finding,
-        reason: `no task owns ${finding.remediationFiles.join(", ")}`,
-      });
+      unroutable.push({ finding, reason: `no task owns ${namedFiles.join(", ")}` });
       continue;
     }
 

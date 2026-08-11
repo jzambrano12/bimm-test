@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatFindingsForRepair, routeFindings } from "./review.ts";
+import { auditFindings, formatFindingsForRepair, routeFindings } from "./review.ts";
 import { validateAndOrder } from "./plan.ts";
 import type { PlannedTask, ReviewFinding, TaskPlan } from "../schemas.ts";
 
@@ -87,9 +87,22 @@ describe("routeFindings", () => {
     expect(unroutable[0]?.reason).toMatch(/no task owns/);
   });
 
-  it("reports a finding with no remediation file rather than guessing one", () => {
-    const { unroutable } = routeFindings([finding({ remediationFiles: [] })], ordered);
-    expect(unroutable[0]?.reason).toMatch(/named no file/);
+  it("reports a finding that names no file and that no task claims", () => {
+    // Distinct from the plan-fallback case below: here nothing in the plan
+    // claims the requirement either, so there is genuinely nowhere to send it.
+    const { actionable, unroutable } = routeFindings(
+      [finding({ requirementId: "orphan", remediationFiles: [] })],
+      validateAndOrder({
+        ...plan,
+        requirements: [
+          ...plan.requirements,
+          { id: "orphan", text: "Something nobody built.", required: true },
+        ],
+      }),
+    );
+
+    expect(actionable).toEqual([]);
+    expect(unroutable[0]?.reason).toMatch(/no task claims this requirement/);
   });
 
   it("groups two findings on one file so they are fixed together", () => {
@@ -112,5 +125,101 @@ describe("formatFindingsForRepair", () => {
     expect(rendered).toContain("Uses 600px and 900px");
     expect(rendered).toContain("Use 640px and 1024px thresholds.");
     expect(rendered).toContain("Use the specified thresholds");
+  });
+});
+
+describe("auditFindings", () => {
+  const requirements = [
+    {
+      id: "responsive",
+      text: "Serve mobile up to 640px, tablet 641px to 1023px, desktop 1024px or wider.",
+      required: true,
+    },
+    { id: "search", text: "Filter the list by model as the user types.", required: true },
+  ];
+
+  /**
+   * The exact verdict a real run produced: "satisfied" on a component using its
+   * UI library's 600px/900px defaults, with evidence that named no number.
+   */
+  it("downgrades a satisfied verdict whose evidence cites none of the stated values", () => {
+    const { findings, downgraded } = auditFindings(
+      [
+        finding({
+          requirementId: "responsive",
+          status: "satisfied",
+          evidence: "CarCard.tsx switches images with useMediaQuery on theme breakpoints.",
+          remediationTitle: "",
+          remediationFiles: [],
+        }),
+      ],
+      requirements,
+    );
+
+    expect(findings[0]?.status).toBe("partial");
+    expect(downgraded).toEqual(["responsive"]);
+    expect(findings[0]?.evidence).toMatch(/Downgraded automatically/);
+    expect(findings[0]?.remediationTitle).toMatch(/640/);
+  });
+
+  it("leaves a satisfied verdict alone when the evidence cites a stated value", () => {
+    const { findings, downgraded } = auditFindings(
+      [
+        finding({
+          requirementId: "responsive",
+          status: "satisfied",
+          evidence: "CarCard.tsx uses (max-width: 640px) and (min-width: 1024px), matching the spec.",
+        }),
+      ],
+      requirements,
+    );
+
+    expect(findings[0]?.status).toBe("satisfied");
+    expect(downgraded).toEqual([]);
+  });
+
+  it("does not audit requirements that state no values", () => {
+    // Nothing to compare, so demanding a citation would only manufacture noise.
+    const { findings, downgraded } = auditFindings(
+      [finding({ requirementId: "search", status: "satisfied", evidence: "Handled in useCars." })],
+      requirements,
+    );
+
+    expect(findings[0]?.status).toBe("satisfied");
+    expect(downgraded).toEqual([]);
+  });
+
+  it("leaves already-unsatisfied findings untouched", () => {
+    const { findings } = auditFindings(
+      [finding({ requirementId: "responsive", status: "missing", evidence: "Not implemented." })],
+      requirements,
+    );
+    expect(findings[0]?.status).toBe("missing");
+  });
+});
+
+describe("routeFindings — fallback via the plan", () => {
+  it("routes a finding with no named file to the task that claims the requirement", () => {
+    // Audited downgrades carry no remediation file, but the plan already records
+    // which task serves which requirement.
+    const { actionable } = routeFindings(
+      [finding({ remediationFiles: [] })],
+      ordered,
+    );
+    expect(actionable[0]?.task.id).toBe("car-image");
+  });
+
+  it("does not route a requirement fix to a test task", () => {
+    // Changing the test to match wrong behaviour is the failure mode this avoids.
+    const planWithTest = validateAndOrder({
+      ...plan,
+      tasks: [
+        task("car-image", ["src/components/CarImage.tsx"]),
+        { ...task("image-test", ["src/__tests__/CarImage.test.tsx"], "test"), dependsOn: ["car-image"] },
+      ],
+    });
+
+    const { actionable } = routeFindings([finding({ remediationFiles: [] })], planWithTest);
+    expect(actionable.map((entry) => entry.task.id)).toEqual(["car-image"]);
   });
 });
