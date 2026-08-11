@@ -8,7 +8,7 @@ import {
   type ReviewFinding,
   type SpecRequirement,
 } from "../schemas.ts";
-import { citesAllValues, extractStatedValues } from "../context/specValues.ts";
+import { citesAnyValue, extractStatedValues } from "../context/specValues.ts";
 import { checkWritable } from "../tools/fs.ts";
 import type { GenerationContext } from "./generate.ts";
 import type { OrderedPlan } from "./plan.ts";
@@ -85,7 +85,15 @@ export async function reviewBuild(
     cache: context.cache,
   });
 
-  const audited = auditFindings(verdict.findings, ordered.plan.requirements);
+  const sourceByPath = new Map(files.map((file) => [file.path, file.contents]));
+  const sourceFor = (requirementId: string): string =>
+    ordered.plan.tasks
+      .filter((task) => task.satisfies.includes(requirementId) && task.kind !== "test")
+      .flatMap((task) => task.targetFiles)
+      .map((path) => sourceByPath.get(path) ?? "")
+      .join("\n");
+
+  const audited = auditFindings(verdict.findings, ordered.plan.requirements, sourceFor);
 
   return {
     findings: audited.findings,
@@ -97,25 +105,31 @@ export async function reviewBuild(
 }
 
 /**
- * Checks the reviewer's verdicts against its own evidence.
+ * Checks the reviewer's verdicts against the code, rather than trusting them.
  *
- * Every other model output in this agent is verified rather than trusted, and the
- * reviewer was the exception — which showed. Asked to judge a requirement stating
- * 640px and 1024px thresholds against a component using its UI library's 600px
- * and 900px defaults, it returned "satisfied" with evidence that never mentioned
- * a single number. The verdict was wrong and the evidence did not support it
- * either way.
+ * Every other model output in this agent is verified; the reviewer was the one
+ * exception, and it showed. Asked to judge a requirement stating 640px and
+ * 1024px thresholds against a component using its library's 600px and 900px
+ * defaults, it answered "satisfied" with evidence that named no number at all.
  *
- * So: when a requirement states specific values and a finding claims
- * `satisfied` without citing every one of them, the claim is unsupported and is
- * downgraded to `partial`. All rather than any, because a later run was vouched
- * for by evidence citing a single threshold that had appeared incidentally in a
- * placeholder image URL. This holds regardless of which model reviewed, which
- * matters because review quality varies most across model tiers.
+ * Two attempts taught where to look. Requiring the *evidence* to mention any
+ * stated value passed a run whose only "640" came from a placeholder image URL.
+ * Requiring it to mention all of them then failed a correct implementation,
+ * because a component handling `≤640` and `641–1023` covers `≥1024` in its else
+ * branch without ever writing the number. Prose describes the work; the source
+ * is the work.
+ *
+ * So: when a requirement states values and none of them appear in the source of
+ * the tasks meant to implement it, the `satisfied` claim is unsupported and is
+ * downgraded. That separates the observed cases cleanly — library defaults of
+ * 600 and 900 contain none of the spec's numbers, a faithful implementation
+ * contains most — and holds regardless of which model reviewed, which matters
+ * because review quality varies most across model tiers.
  */
 export function auditFindings(
   findings: readonly ReviewFinding[],
   requirements: readonly SpecRequirement[],
+  sourceFor: (requirementId: string) => string,
 ): { findings: ReviewFinding[]; downgraded: readonly string[] } {
   const textOf = new Map(requirements.map((requirement) => [requirement.id, requirement.text]));
   const downgraded: string[] = [];
@@ -128,7 +142,11 @@ export function auditFindings(
 
     const stated = extractStatedValues(requirementText);
     if (stated.length === 0) return finding;
-    if (citesAllValues(finding.evidence, stated)) return finding;
+
+    // No source to inspect means no grounds to contradict the reviewer.
+    const source = sourceFor(finding.requirementId);
+    if (source === "") return finding;
+    if (citesAnyValue(source, stated)) return finding;
 
     downgraded.push(finding.requirementId);
     return {
@@ -136,8 +154,8 @@ export function auditFindings(
       status: "partial",
       evidence:
         `${finding.evidence} [Downgraded automatically: the requirement states ` +
-        `${stated.join(", ")}, and this evidence does not cite all of them, so the ` +
-        `claim that every stated value is implemented is unsupported.]`,
+        `${stated.join(", ")}, and none of those values appear anywhere in the source ` +
+        `implementing it, so the claim that it uses them is unsupported.]`,
       remediationTitle:
         finding.remediationTitle === ""
           ? `Use the exact values the specification states (${stated.join(", ")})`

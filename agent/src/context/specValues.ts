@@ -19,13 +19,15 @@ export function extractStatedValues(text: string): string[] {
 }
 
 /**
- * True when `text` mentions every one of `values`.
+ * True when `text` mentions at least one of `values`.
  *
- * All, not any, and for a concrete reason: a requirement naming 640, 641, 1023
- * and 1024 was vouched for by evidence that mentioned only 640 — which had
- * appeared incidentally, in a placeholder image URL of 640x360. Citing one
- * threshold establishes nothing about the other three.
+ * Any, not all, because the caller applies this to source code rather than to
+ * prose. A faithful implementation of "mobile up to 640px, tablet 641–1023px,
+ * desktop 1024px and above" writes three of those four numbers and leaves the
+ * fourth to an else branch, so demanding all of them fails correct code. An
+ * implementation that ignored the specification entirely — reaching for a
+ * library's 600 and 900 defaults — contains none of them.
  */
-export function citesAllValues(text: string, values: readonly string[]): boolean {
-  return values.length > 0 && values.every((value) => text.includes(value));
+export function citesAnyValue(text: string, values: readonly string[]): boolean {
+  return values.length > 0 && values.some((value) => text.includes(value));
 }

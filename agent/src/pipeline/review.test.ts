@@ -129,6 +129,10 @@ describe("formatFindingsForRepair", () => {
 });
 
 describe("auditFindings", () => {
+  const sourceWithDefaults = () => 'useMediaQuery(theme.breakpoints.up("md"))';
+  const sourceWithSpecValues = () =>
+    'useMediaQuery("(max-width: 640px)"); useMediaQuery("(min-width: 641px) and (max-width: 1023px)")';
+
   const requirements = [
     {
       id: "responsive",
@@ -142,26 +146,9 @@ describe("auditFindings", () => {
    * The exact verdict a real run produced: "satisfied" on a component using its
    * UI library's 600px/900px defaults, with evidence that named no number.
    */
-  it("downgrades a satisfied verdict that cites only some of the stated values", () => {
-    // One threshold does not vouch for four, especially when it also appears in
-    // an unrelated placeholder image URL.
-    const { findings, downgraded } = auditFindings(
-      [
-        finding({
-          requirementId: "responsive",
-          status: "satisfied",
-          evidence: "Images are 640x360 placeholders selected by breakpoint.",
-          remediationTitle: "",
-          remediationFiles: [],
-        }),
-      ],
-      requirements,
-    );
-    expect(findings[0]?.status).toBe("partial");
-    expect(downgraded).toEqual(["responsive"]);
-  });
-
-  it("downgrades a satisfied verdict whose evidence cites none of the stated values", () => {
+  it("downgrades a satisfied verdict when the source uses none of the stated values", () => {
+    // The original defect: a component on its library's 600/900 defaults, blessed
+    // by a reviewer whose evidence named no number at all.
     const { findings, downgraded } = auditFindings(
       [
         finding({
@@ -173,6 +160,7 @@ describe("auditFindings", () => {
         }),
       ],
       requirements,
+      sourceWithDefaults,
     );
 
     expect(findings[0]?.status).toBe("partial");
@@ -181,21 +169,33 @@ describe("auditFindings", () => {
     expect(findings[0]?.remediationTitle).toMatch(/640/);
   });
 
-  it("leaves a satisfied verdict alone when the evidence cites a stated value", () => {
+  it("accepts a correct implementation that leaves one boundary implicit", () => {
+    // The false positive that reading prose produced: evidence citing three of
+    // four thresholds was rejected, although handling <=640 and 641-1023 covers
+    // >=1024 in the else branch.
     const { findings, downgraded } = auditFindings(
       [
         finding({
           requirementId: "responsive",
           status: "satisfied",
-          evidence:
-            "CarCard.tsx uses (max-width: 640px), (min-width: 641px), (max-width: 1023px) and (min-width: 1024px).",
+          evidence: "CarCard.tsx selects the image by viewport.",
         }),
       ],
       requirements,
+      sourceWithSpecValues,
     );
 
     expect(findings[0]?.status).toBe("satisfied");
     expect(downgraded).toEqual([]);
+  });
+
+  it("does not contradict the reviewer when there is no source to inspect", () => {
+    const { findings } = auditFindings(
+      [finding({ requirementId: "responsive", status: "satisfied", evidence: "Done." })],
+      requirements,
+      () => "",
+    );
+    expect(findings[0]?.status).toBe("satisfied");
   });
 
   it("does not audit requirements that state no values", () => {
@@ -203,6 +203,7 @@ describe("auditFindings", () => {
     const { findings, downgraded } = auditFindings(
       [finding({ requirementId: "search", status: "satisfied", evidence: "Handled in useCars." })],
       requirements,
+      sourceWithDefaults,
     );
 
     expect(findings[0]?.status).toBe("satisfied");
@@ -213,6 +214,7 @@ describe("auditFindings", () => {
     const { findings } = auditFindings(
       [finding({ requirementId: "responsive", status: "missing", evidence: "Not implemented." })],
       requirements,
+      sourceWithDefaults,
     );
     expect(findings[0]?.status).toBe("missing");
   });

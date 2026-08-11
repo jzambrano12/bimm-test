@@ -18,6 +18,7 @@ import { GenerationContractError } from "./pipeline/generate.ts";
 import { createPlan, PlanValidationError, renderPlan } from "./pipeline/plan.ts";
 import { executePlan } from "./pipeline/run.ts";
 import { ProjectFs, SandboxViolationError } from "./tools/fs.ts";
+import { estimateCost, renderCostLines, writeRunArtifacts } from "./report.ts";
 import { boilerplateRoot, scaffold, ScaffoldError } from "./tools/scaffold.ts";
 
 const ledger = new UsageLedger();
@@ -185,6 +186,7 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  const startedAt = Date.now();
   const spec = await readSpec(options.specPath);
   const config = loadConfig();
   const client = createLlmClient(config);
@@ -267,10 +269,26 @@ async function main(): Promise<number> {
     onProgress: log,
   });
 
-  const { totals, byPhase } = ledger.snapshot();
+  const usage = ledger.snapshot();
+  const { totals } = usage;
+  const cost = estimateCost(models.worker, usage);
   const degraded = outcome.tasks.filter(
     (task) => task.status === "degraded" || task.status === "failed",
   );
+
+  const artifacts = await writeRunArtifacts(options.outputDir, {
+    spec: options.specPath,
+    outputDir: options.outputDir,
+    provider: config.baseUrl,
+    plannerModel: models.planner,
+    workerModel: models.worker,
+    usage,
+    cost,
+    cache: cache.stats(),
+    ordered,
+    outcome,
+    durationMs: Date.now() - startedAt,
+  });
 
   const report = [
     "",
@@ -279,9 +297,7 @@ async function main(): Promise<number> {
     `Tests:           ${outcome.testsPassed ? "passing" : "failing"}`,
     `LLM calls:       ${totals.calls} (${totals.promptTokens + totals.completionTokens} tokens)` +
       (totals.cacheHits > 0 ? `, ${totals.cacheHits} served from cache` : ""),
-    `  plan     ${byPhase.plan.calls} call(s), ${byPhase.plan.promptTokens + byPhase.plan.completionTokens} tokens`,
-    `  generate ${byPhase.generate.calls} call(s), ${byPhase.generate.promptTokens + byPhase.generate.completionTokens} tokens`,
-    `  repair   ${byPhase.repair.calls} call(s), ${byPhase.repair.promptTokens + byPhase.repair.completionTokens} tokens`,
+    ...renderCostLines(usage, cost),
     "",
     "Tasks:",
     ...outcome.tasks.map(
@@ -328,6 +344,12 @@ async function main(): Promise<number> {
   if (ordered.warnings.length > 0) {
     report.push("", "Plan warnings:", ...ordered.warnings.map((warning) => `  ${warning}`));
   }
+
+  report.push(
+    "",
+    "Artifacts:",
+    ...artifacts.map((path) => `  ${path}`),
+  );
 
   process.stdout.write(`${report.join("\n")}\n`);
 
