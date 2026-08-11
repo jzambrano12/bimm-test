@@ -324,6 +324,14 @@ async function repairFailingTests(
       `${tests.failedFiles.length} file(s) failing, repairing ${repairable.length} (round ${attempt})`,
     );
 
+    // The outer loop must check both tiers, not just the one that triggered it.
+    // A test repair is still code: it can satisfy the assertion and break the
+    // compiler on the way, and a run once finished with a clean generation phase
+    // and two type errors introduced entirely by test repairs. Folding the
+    // task's own type diagnostics into the payload lets the next round fix both
+    // at once instead of trading one failure for the other.
+    const typeState = await typecheck(cwd);
+
     for (const task of repairable) {
       const previous = await Promise.all(
         task.targetFiles.map(async (path) => ({
@@ -333,8 +341,18 @@ async function repairFailingTests(
         })),
       );
 
+      const ownTypeErrors = diagnosticsForFiles(typeState.diagnostics, task.targetFiles);
+      const payload = [
+        ownTypeErrors.length > 0
+          ? `Type errors in your own file — fix these too:\n${formatDiagnostics(ownTypeErrors)}`
+          : "",
+        `Test run output:\n${tests.output}`,
+      ]
+        .filter((section) => section !== "")
+        .join("\n\n");
+
       try {
-        await repairTask(client, ledger, context, task, previous, tests.output, attempt);
+        await repairTask(client, ledger, context, task, previous, payload, attempt);
         const index = merged.findIndex((entry) => entry.taskId === task.id);
         const existing = merged[index];
         if (index >= 0 && existing !== undefined) {

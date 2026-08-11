@@ -1,35 +1,20 @@
-import { Card, CardContent, CardMedia, Typography, useMediaQuery, useTheme } from "@mui/material";
-import type { Car } from "../types";
+import { Card, CardContent, Typography } from "@mui/material";
+import { Car } from "@/types";
+import { CarImage } from "@/components/CarImage";
 
 export interface CarCardProps {
   car: Car;
 }
 
 export function CarCard({ car }: CarCardProps) {
-  const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
-  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
-
-  let imageSrc = car.mobile;
-  if (isDesktop) {
-    imageSrc = car.desktop;
-  } else if (isTablet) {
-    imageSrc = car.tablet;
-  }
-
   return (
     <Card sx={{ height: "100%", display: "flex", flexDirection: "column" }}>
-      <CardMedia
-        component="img"
-        height="200"
-        image={imageSrc}
-        alt={`${car.year} ${car.make} ${car.model}`}
-      />
+      <CarImage car={car} />
       <CardContent sx={{ flexGrow: 1 }}>
-        <Typography variant="h6" gutterBottom>
+        <Typography variant="h6" component="div">
           {car.year} {car.make} {car.model}
         </Typography>
-        <Typography color="text.secondary">
+        <Typography variant="body2" color="text.secondary">
           Color: {car.color}
         </Typography>
       </CardContent>

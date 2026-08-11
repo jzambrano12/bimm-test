@@ -49,6 +49,14 @@ STACK IDIOM
   not by stubbing fetch. Assert observable behaviour, not implementation detail.
 - Tests must be deterministic: await what is asynchronous, and never assert on
   wall-clock timing.
+- A mocked GraphQL provider consumes each mock exactly once. If the code under
+  test refetches a query after a mutation — which correct code does, so that the
+  change becomes visible — that query needs a second mock entry, and the second
+  one returns the post-mutation data. Omitting it does not produce an obvious
+  "missing mock" error: the refetch simply yields nothing and the assertion fails
+  with the new item never appearing. If a test cannot find something that should
+  have just been added, suspect a missing refetch mock before suspecting the
+  component.
 
 QUALITY BAR
 Write what a senior engineer on this codebase would write: named exports,
