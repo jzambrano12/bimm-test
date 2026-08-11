@@ -5,6 +5,7 @@ import type { UsageLedger } from "../llm/usage.ts";
 import {
   GENERATOR_SYSTEM,
   buildGeneratorUser,
+  buildRepairUser,
   type GeneratorContext,
 } from "../prompts/generator.ts";
 import { GenerationResult, type GeneratedFile, type PlannedTask, type SpecRequirement } from "../schemas.ts";
@@ -154,10 +155,67 @@ export async function generateTask(
     );
   }
 
+  return persist(context, task, files);
+}
+
+async function persist(
+  context: GenerationContext,
+  task: PlannedTask,
+  files: readonly GeneratedFile[],
+): Promise<readonly GeneratedFile[]> {
   for (const file of files) {
     await context.fs.write(file.path, file.contents);
   }
   context.registry.record(task.id, files);
-
   return files;
+}
+
+/**
+ * One repair attempt: the same generator role, given what it produced and what
+ * went wrong.
+ *
+ * `diagnostics` must already be scoped to this task's files. Passing the whole
+ * project's errors would invite the model to reach outside its own task, and the
+ * files it does not own are not writable to it anyway — it would simply fail
+ * again, having spent a call.
+ */
+export async function repairTask(
+  client: OpenAI,
+  ledger: UsageLedger,
+  context: GenerationContext,
+  task: PlannedTask,
+  previous: readonly GeneratedFile[],
+  diagnostics: string,
+  attempt: number,
+): Promise<readonly GeneratedFile[]> {
+  const result = await completeStructured(client, ledger, {
+    model: context.model,
+    phase: "repair",
+    system: GENERATOR_SYSTEM,
+    user: buildRepairUser(
+      task,
+      buildGeneratorContext(task, context),
+      previous.map((file) => ({ path: file.path, contents: file.contents })),
+      diagnostics,
+      attempt,
+    ),
+    schema: GenerationResult,
+    schemaName: "GenerationResult",
+  });
+
+  const files = result.files.map((file) => ({
+    ...file,
+    contents: stripCodeFence(file.contents),
+  }));
+
+  // A repair that drifts off contract is worse than no repair: it would leave
+  // the previous, merely-broken files replaced by unrelated ones.
+  const problems = verifyAgainstTask(task, files);
+  if (problems.length > 0) {
+    throw new GenerationContractError(
+      `repair of "${task.id}" produced an off-contract result:\n${problems.map((problem) => `  - ${problem}`).join("\n")}`,
+    );
+  }
+
+  return persist(context, task, files);
 }

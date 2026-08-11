@@ -13,8 +13,9 @@ import { createLlmClient, resolveModels, ModelResolutionError } from "./llm/clie
 import { LlmError } from "./llm/complete.ts";
 import { StructuredOutputError } from "./llm/structured.ts";
 import { UsageLedger } from "./llm/usage.ts";
-import { generateTask, GenerationContractError } from "./pipeline/generate.ts";
+import { GenerationContractError } from "./pipeline/generate.ts";
 import { createPlan, PlanValidationError, renderPlan } from "./pipeline/plan.ts";
+import { executePlan } from "./pipeline/run.ts";
 import { ProjectFs, SandboxViolationError } from "./tools/fs.ts";
 import { boilerplateRoot, scaffold, ScaffoldError } from "./tools/scaffold.ts";
 
@@ -241,22 +242,50 @@ async function main(): Promise<number> {
   };
 
   process.stderr.write("\n");
-  for (const [index, level] of ordered.levels.entries()) {
-    for (const task of level) {
-      const files = await generateTask(client, ledger, context, task);
-      log(`level ${index + 1}`, `${task.id} → ${files.map((file) => file.path).join(", ")}`);
+  const outcome = await executePlan(client, ledger, context, ordered, options.outputDir, {
+    maxRepairs: options.maxRepairsOverride ?? config.maxRepairs,
+    onProgress: log,
+  });
+
+  const { totals, byPhase } = ledger.snapshot();
+  const degraded = outcome.tasks.filter(
+    (task) => task.status === "degraded" || task.status === "failed",
+  );
+
+  const report = [
+    "",
+    `Files written:   ${registry.paths().length}`,
+    `Typecheck:       ${outcome.typecheckClean ? "clean" : `${outcome.outstandingDiagnostics.length} error(s)`}`,
+    `Tests:           ${outcome.testsPassed ? "passing" : "failing"}`,
+    `LLM calls:       ${totals.calls} (${totals.promptTokens + totals.completionTokens} tokens)`,
+    `  plan     ${byPhase.plan.calls} call(s), ${byPhase.plan.promptTokens + byPhase.plan.completionTokens} tokens`,
+    `  generate ${byPhase.generate.calls} call(s), ${byPhase.generate.promptTokens + byPhase.generate.completionTokens} tokens`,
+    `  repair   ${byPhase.repair.calls} call(s), ${byPhase.repair.promptTokens + byPhase.repair.completionTokens} tokens`,
+    "",
+    "Tasks:",
+    ...outcome.tasks.map(
+      (task) =>
+        `  [${task.status}] ${task.taskId}${task.note === "" ? "" : ` — ${task.note}`}`,
+    ),
+  ];
+
+  if (degraded.length > 0) {
+    report.push("", `Unfinished work (${degraded.length} task(s)):`);
+    for (const task of degraded) {
+      report.push(`  ${task.taskId}:`);
+      for (const problem of task.unresolved) report.push(`    ${problem}`);
     }
   }
 
-  const { totals, byPhase } = ledger.snapshot();
-  process.stdout.write(
-    `\ngenerated ${registry.paths().length} files with ${totals.calls} LLM call(s)\n` +
-      `  plan:     ${byPhase.plan.promptTokens + byPhase.plan.completionTokens} tokens\n` +
-      `  generate: ${byPhase.generate.promptTokens + byPhase.generate.completionTokens} tokens\n`,
-  );
+  if (ordered.warnings.length > 0) {
+    report.push("", "Plan warnings:", ...ordered.warnings.map((warning) => `  ${warning}`));
+  }
 
-  // Validation and repair land next (tickets 9 and 10).
-  return 0;
+  process.stdout.write(`${report.join("\n")}\n`);
+
+  // A run that could not finish everything reports it in the exit code too, so a
+  // scripted caller does not have to parse prose to find out.
+  return outcome.typecheckClean && outcome.testsPassed && degraded.length === 0 ? 0 : 1;
 }
 
 const exitCode = await main().catch((error: unknown) => {
