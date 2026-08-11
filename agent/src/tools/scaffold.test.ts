@@ -1,6 +1,7 @@
+import { existsSync } from "node:fs";
 import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
 import { ScaffoldError, boilerplateRoot, scaffold } from "./scaffold.ts";
 
@@ -32,8 +33,21 @@ async function makeFakeBoilerplate(): Promise<string> {
 }
 
 describe("boilerplateRoot", () => {
-  it("resolves to the directory containing the agent workspace", () => {
-    expect(boilerplateRoot()).toMatch(/Fullstack-Coding-Challenge-main$/);
+  /**
+   * Asserted structurally rather than by directory name. An earlier version
+   * expected the checkout to be called "Fullstack-Coding-Challenge-main", which
+   * passed here and failed in a fresh clone under any other name — including
+   * every clone a reviewer would make.
+   */
+  it("resolves to the directory that contains the agent workspace", () => {
+    expect(boilerplateRoot()).toBe(resolve(import.meta.dirname, "..", "..", ".."));
+  });
+
+  it("points at a directory that really holds the boilerplate", () => {
+    const root = boilerplateRoot();
+    for (const marker of ["package.json", "src/types.ts", "src/graphql/queries.ts", "agent"]) {
+      expect(existsSync(join(root, marker)), `${marker} missing from ${root}`).toBe(true);
+    }
   });
 });
 
