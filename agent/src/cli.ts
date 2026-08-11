@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
 import { loadConfig, ConfigError } from "./config.ts";
+import { createLlmClient, resolveModels, ModelResolutionError } from "./llm/client.ts";
+import { LlmError } from "./llm/complete.ts";
 
 const USAGE = `
 car-inventory-agent — spec-driven code generation into a React + TS boilerplate
@@ -134,9 +136,13 @@ async function main(): Promise<number> {
   }
 
   const config = loadConfig();
+  const client = createLlmClient(config);
 
-  // Pipeline wiring lands with the planner (ticket 7). Until then the CLI
-  // proves the workspace, flag parsing and config resolution are sound.
+  // Preflight before any generation work: validates the credential and the
+  // model in one cheap request, so a bad key fails in two seconds rather than
+  // halfway through a run that has already written files.
+  const models = await resolveModels(client, config);
+
   process.stdout.write(
     `${JSON.stringify(
       {
@@ -145,8 +151,8 @@ async function main(): Promise<number> {
         dryRun: options.dryRun,
         resume: options.resume,
         provider: config.baseUrl,
-        model: config.model ?? "(auto-select from provider catalog)",
-        plannerModel: config.plannerModel ?? "(same as model)",
+        workerModel: models.worker + (models.workerAutoSelected ? " (auto-selected)" : ""),
+        plannerModel: models.planner,
         maxRepairs: options.maxRepairsOverride ?? config.maxRepairs,
         concurrency: options.concurrencyOverride ?? config.concurrency,
         cache: options.cacheDisabled ? false : config.cacheEnabled,
@@ -155,6 +161,8 @@ async function main(): Promise<number> {
       2,
     )}\n`,
   );
+
+  // Pipeline wiring lands with the planner (ticket 7).
   return 0;
 }
 
@@ -163,9 +171,13 @@ const exitCode = await main().catch((error: unknown) => {
     process.stderr.write(`error: ${error.message}\n\n${USAGE}`);
     return 2;
   }
-  if (error instanceof ConfigError) {
+  if (error instanceof ConfigError || error instanceof ModelResolutionError) {
     process.stderr.write(`configuration error: ${error.message}\n`);
     return 78; // EX_CONFIG
+  }
+  if (error instanceof LlmError) {
+    process.stderr.write(`provider error: ${error.message}\n`);
+    return 69; // EX_UNAVAILABLE
   }
   process.stderr.write(`${error instanceof Error ? error.stack : String(error)}\n`);
   return 1;
