@@ -44,6 +44,13 @@ describe("buildContractDigest against the provided boilerplate", () => {
     expect(digest.compilerRules.join("\n")).not.toMatch(/optional property cannot be/);
   });
 
+  it("warns against the JSX namespace that React 19 removed", () => {
+    // A few-shot example using `JSX.Element` propagated this error into every
+    // generated component. The rule is derived from jsx: react-jsx, so it
+    // travels with the contract rather than living in one prompt.
+    expect(digest.compilerRules.join("\n")).toMatch(/no global `JSX` namespace/i);
+  });
+
   it("reports the path alias", () => {
     expect(digest.pathAlias).toContain("@/*");
   });

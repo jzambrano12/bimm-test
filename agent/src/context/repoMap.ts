@@ -94,7 +94,11 @@ function extractCompilerRules(tsconfig: Record<string, unknown>): string[] {
   }
 
   if (enabled["jsx"] === "react-jsx") {
-    rules.push("JSX runtime is automatic — do not import React just to use JSX.");
+    rules.push(
+      "JSX runtime is automatic — do not import React just to use JSX. There is no " +
+        "global `JSX` namespace either, so never annotate a component's return type as " +
+        "`JSX.Element`; leave component return types inferred.",
+    );
   }
   return rules;
 }
