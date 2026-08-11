@@ -1,19 +1,5 @@
-import { Container, CssBaseline, ThemeProvider, createTheme } from "@mui/material";
-import { CarInventory } from "@/components/CarInventory";
-
-const theme = createTheme({
-  palette: {
-    mode: "light",
-  },
-});
+import { CarList } from "@/components/CarList";
 
 export default function App() {
-  return (
-    <ThemeProvider theme={theme}>
-      <CssBaseline />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
-        <CarInventory />
-      </Container>
-    </ThemeProvider>
-  );
+  return <CarList />;
 }

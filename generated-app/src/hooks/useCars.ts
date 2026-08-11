@@ -1,12 +1,23 @@
 import { useQuery, useMutation } from "@apollo/client";
-import { GET_CARS, ADD_CAR } from "../graphql/queries";
-import type { Car } from "../types";
+import { GET_CARS, ADD_CAR } from "@/graphql/queries";
+import type { Car } from "@/types";
 
 export interface UseCarsResult {
   cars: Car[];
   loading: boolean;
   error?: Error;
   refetch: () => void;
+}
+
+export interface UseAddCarResult {
+  addCar: (input: {
+    make: string;
+    model: string;
+    year: number;
+    color: string;
+  }) => Promise<void>;
+  loading: boolean;
+  error?: Error;
 }
 
 export function useCars(): UseCarsResult {
@@ -17,15 +28,20 @@ export function useCars(): UseCarsResult {
     loading,
     error: error ? new Error(error.message) : undefined,
     refetch: () => {
-      void refetch();
+      refetch();
     },
   };
 }
 
-export function useAddCar() {
+export function useAddCar(): UseAddCarResult {
   const [mutate, { loading, error }] = useMutation<
     { addCar: Car },
-    { make: string; model: string; year: number; color: string }
+    {
+      make: string;
+      model: string;
+      year: number;
+      color: string;
+    }
   >(ADD_CAR, {
     refetchQueries: [{ query: GET_CARS }],
   });
@@ -37,7 +53,12 @@ export function useAddCar() {
     color: string;
   }) => {
     await mutate({
-      variables: input,
+      variables: {
+        make: input.make,
+        model: input.model,
+        year: input.year,
+        color: input.color,
+      },
     });
   };
 

@@ -1,4 +1,4 @@
-import { useMediaQuery, useTheme } from "@mui/material";
+import { useMediaQuery } from "@mui/material";
 
 export interface ResponsiveCarImageProps {
   mobile: string;
@@ -13,29 +13,18 @@ export function ResponsiveCarImage({
   desktop,
   alt,
 }: ResponsiveCarImageProps) {
-  const theme = useTheme();
-  const isDesktop = useMediaQuery(theme.breakpoints.up("md"), { noSsr: true });
-  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"), {
-    noSsr: true,
-  });
+  const isMobile = useMediaQuery("(max-width: 640px)");
+  const isTablet = useMediaQuery("(min-width: 641px) and (max-width: 1023px)");
+  const isDesktop = useMediaQuery("(min-width: 1024px)");
 
-  let src = mobile;
-  if (isDesktop) {
-    src = desktop;
+  let src = desktop;
+  if (isMobile) {
+    src = mobile;
   } else if (isTablet) {
     src = tablet;
+  } else if (isDesktop) {
+    src = desktop;
   }
 
-  return (
-    <img
-      src={src}
-      alt={alt}
-      style={{
-        width: "100%",
-        height: "auto",
-        display: "block",
-        objectFit: "cover",
-      }}
-    />
-  );
+  return <img src={src} alt={alt} />;
 }

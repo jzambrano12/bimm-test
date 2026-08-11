@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import { mapWithConcurrency } from "../concurrency.ts";
 import type { UsageLedger } from "../llm/usage.ts";
 import type { GeneratedFile, PlannedTask } from "../schemas.ts";
 import {
@@ -57,6 +58,8 @@ export interface RunOutcome {
 
 export interface RunOptions {
   readonly maxRepairs: number;
+  /** Concurrent LLM calls within one dependency level. */
+  readonly concurrency: number;
   /** Keep the boilerplate's Example reference files in the delivered app. */
   readonly keepExamples: boolean;
   /** The specification verbatim, for the review stage to judge against. */
@@ -101,99 +104,163 @@ function summarise(diagnostics: readonly Diagnostic[]): string[] {
 }
 
 /**
- * Generates one task and repairs it until it compiles or the budget is spent.
+ * Generates a whole dependency level, then repairs it to a clean typecheck.
  *
- * The compiler runs after each attempt rather than once at the end, so a failure
- * is attributed to the task that introduced it while that task is still the
- * subject. Diagnostics handed to a repair are scoped to the task's own files:
- * errors elsewhere are either another task's problem or a consequence this task
- * cannot legally fix, since it has no write access outside its own paths.
+ * The compiler runs once per repair round rather than once per task. Earlier this
+ * was per task, which cost a full tsc invocation for every file — roughly fifty
+ * over a twelve-task plan. Tasks within a level are independent by construction,
+ * so one typecheck attributes cleanly to all of them: each task reads only the
+ * diagnostics for the files it owns, and errors elsewhere are either a sibling's
+ * problem or outside its write access.
+ *
+ * Generation and repair within the level run concurrently, capped. The cap exists
+ * for the provider, not for correctness: free tiers meter requests per minute,
+ * and there is nothing to gain from being rate-limited faster.
  */
-async function runTask(
+async function runLevel(
   client: OpenAI,
   ledger: UsageLedger,
   context: GenerationContext,
-  task: PlannedTask,
+  level: readonly PlannedTask[],
   options: RunOptions,
   cwd: string,
-): Promise<TaskOutcome> {
-  const base = { taskId: task.id, title: task.title, files: task.targetFiles };
+): Promise<TaskOutcome[]> {
+  interface State {
+    readonly task: PlannedTask;
+    files: readonly GeneratedFile[];
+    outcome: TaskOutcome | undefined;
+    attempts: number;
+  }
 
-  let files: readonly GeneratedFile[];
-  try {
-    files = await generateTask(client, ledger, context, task);
-  } catch (error) {
-    // An off-contract shape is recoverable — the model produced the wrong files,
-    // not unusable ones — but only through the repair path, which needs
-    // something to repair. With nothing written, the task is simply failed.
-    if (error instanceof GenerationContractError) {
-      return {
-        ...base,
+  const states: State[] = level.map((task) => ({
+    task,
+    files: [],
+    outcome: undefined,
+    attempts: 0,
+  }));
+
+  const base = (task: PlannedTask) => ({
+    taskId: task.id,
+    title: task.title,
+    files: task.targetFiles,
+  });
+
+  const generated = await mapWithConcurrency(states, options.concurrency, async (state) => {
+    state.files = await generateTask(client, ledger, context, state.task);
+  });
+
+  generated.forEach((result, index) => {
+    const state = states[index];
+    if (state === undefined || result.status === "fulfilled") return;
+
+    // An off-contract shape is recoverable in principle, but the repair path
+    // needs something to repair; with nothing written the task is simply failed.
+    if (result.reason instanceof GenerationContractError) {
+      state.outcome = {
+        ...base(state.task),
         status: "failed",
         repairAttempts: 0,
-        unresolved: [error.message],
+        unresolved: [result.reason.message],
         note: "generation did not produce the declared files",
       };
+      return;
     }
-    throw error;
-  }
+    throw result.reason;
+  });
 
-  for (let attempt = 0; attempt <= options.maxRepairs; attempt += 1) {
+  for (let round = 0; round <= options.maxRepairs; round += 1) {
+    const pending = states.filter((state) => state.outcome === undefined);
+    if (pending.length === 0) break;
+
     const result = await typecheck(cwd);
-    const mine = diagnosticsForFiles(result.diagnostics, task.targetFiles);
 
-    if (mine.length === 0) {
-      return {
-        ...base,
-        status: attempt === 0 ? "generated" : "repaired",
-        repairAttempts: attempt,
-        unresolved: [],
-        note: attempt === 0 ? "" : `compiled after ${attempt} repair attempt(s)`,
-      };
+    const stillBroken: { state: State; diagnostics: Diagnostic[] }[] = [];
+    for (const state of pending) {
+      const mine = diagnosticsForFiles(result.diagnostics, state.task.targetFiles);
+      if (mine.length === 0) {
+        state.outcome = {
+          ...base(state.task),
+          status: state.attempts === 0 ? "generated" : "repaired",
+          repairAttempts: state.attempts,
+          unresolved: [],
+          note: state.attempts === 0 ? "" : `compiled after ${state.attempts} repair attempt(s)`,
+        };
+      } else {
+        stillBroken.push({ state, diagnostics: mine });
+      }
     }
 
-    if (attempt === options.maxRepairs) {
-      options.onProgress(
-        "degraded",
-        `${task.id}: ${mine.length} error(s) remain after ${attempt} repair attempt(s)`,
-      );
-      return {
-        ...base,
-        status: "degraded",
-        repairAttempts: attempt,
-        unresolved: summarise(mine),
-        note: `repair budget of ${options.maxRepairs} exhausted; run continued without this task`,
-      };
-    }
+    if (stillBroken.length === 0) break;
 
-    options.onProgress("repair", `${task.id}: ${mine.length} error(s), attempt ${attempt + 1}`);
-
-    try {
-      files = await repairTask(
-        client,
-        ledger,
-        context,
-        task,
-        files,
-        formatDiagnostics(mine),
-        attempt + 1,
-      );
-    } catch (error) {
-      if (error instanceof GenerationContractError) {
-        return {
-          ...base,
+    if (round === options.maxRepairs) {
+      for (const { state, diagnostics } of stillBroken) {
+        options.onProgress(
+          "degraded",
+          `${state.task.id}: ${diagnostics.length} error(s) remain after ${state.attempts} attempt(s)`,
+        );
+        state.outcome = {
+          ...base(state.task),
           status: "degraded",
-          repairAttempts: attempt + 1,
-          unresolved: summarise(mine),
-          note: "a repair attempt drifted off contract and was rejected",
+          repairAttempts: state.attempts,
+          unresolved: summarise(diagnostics),
+          note: `repair budget of ${options.maxRepairs} exhausted; run continued without this task`,
         };
       }
-      throw error;
+      break;
     }
+
+    options.onProgress(
+      "repair",
+      `${stillBroken.map(({ state, diagnostics }) => `${state.task.id} (${diagnostics.length})`).join(", ")}`,
+    );
+
+    const repaired = await mapWithConcurrency(
+      stillBroken,
+      options.concurrency,
+      async ({ state, diagnostics }) => {
+        state.attempts += 1;
+        state.files = await repairTask(
+          client,
+          ledger,
+          context,
+          state.task,
+          state.files,
+          formatDiagnostics(diagnostics),
+          state.attempts,
+        );
+      },
+    );
+
+    repaired.forEach((outcome, index) => {
+      const entry = stillBroken[index];
+      if (entry === undefined || outcome.status === "fulfilled") return;
+
+      if (outcome.reason instanceof GenerationContractError) {
+        entry.state.outcome = {
+          ...base(entry.state.task),
+          status: "degraded",
+          repairAttempts: entry.state.attempts,
+          unresolved: summarise(entry.diagnostics),
+          note: "a repair attempt drifted off contract and was rejected",
+        };
+        return;
+      }
+      throw outcome.reason;
+    });
   }
 
-  // Unreachable: the loop returns on every path.
-  throw new Error(`repair loop for "${task.id}" exited without a verdict`);
+  return states.map((state) => {
+    if (state.outcome !== undefined) return state.outcome;
+
+    // Defensive: the loop settles every state on every exit path.
+    return {
+      ...base(state.task),
+      status: "degraded" as const,
+      repairAttempts: state.attempts,
+      unresolved: ["repair loop exited without a verdict"],
+      note: "internal: unsettled task",
+    };
+  });
 }
 
 /**
@@ -226,12 +293,13 @@ export async function executePlan(
   const outcomes: TaskOutcome[] = [];
 
   for (const [index, level] of ordered.levels.entries()) {
-    for (const task of level) {
-      const outcome = await runTask(client, ledger, context, task, options, cwd);
-      outcomes.push(outcome);
+    const levelOutcomes = await runLevel(client, ledger, context, level, options, cwd);
+    outcomes.push(...levelOutcomes);
+
+    for (const outcome of levelOutcomes) {
       options.onProgress(
         `level ${index + 1}`,
-        `${task.id} [${outcome.status}] → ${outcome.files.join(", ")}`,
+        `${outcome.taskId} [${outcome.status}] → ${outcome.files.join(", ")}`,
       );
     }
   }

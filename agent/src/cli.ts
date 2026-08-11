@@ -12,6 +12,7 @@ import {
 import { createLlmClient, resolveModels, ModelResolutionError } from "./llm/client.ts";
 import { LlmError } from "./llm/complete.ts";
 import { StructuredOutputError } from "./llm/structured.ts";
+import { PromptCache } from "./llm/cache.ts";
 import { UsageLedger } from "./llm/usage.ts";
 import { GenerationContractError } from "./pipeline/generate.ts";
 import { createPlan, PlanValidationError, renderPlan } from "./pipeline/plan.ts";
@@ -206,10 +207,16 @@ async function main(): Promise<number> {
   const digest = await buildContractDigest(sourceRoot);
   const contract = renderContract(digest);
 
+  const cache = new PromptCache(
+    resolve(import.meta.dirname, "..", ".cache"),
+    !options.cacheDisabled && config.cacheEnabled,
+  );
+
   const ordered = await createPlan(client, ledger, {
     model: models.planner,
     spec,
     contract,
+    cache,
   });
 
   process.stdout.write(`\n${renderPlan(ordered)}\n`);
@@ -246,12 +253,14 @@ async function main(): Promise<number> {
     tasksById: new Map(ordered.plan.tasks.map((task) => [task.id, task])),
     registry,
     fs: new ProjectFs(options.outputDir),
+    cache,
   };
 
   process.stderr.write("\n");
   const outcome = await executePlan(client, ledger, context, ordered, options.outputDir, {
     maxRepairs: options.maxRepairsOverride ?? config.maxRepairs,
     keepExamples: options.keepExamples,
+    concurrency: options.concurrencyOverride ?? config.concurrency,
     spec,
     reviewModel: models.planner,
     skipReview: options.reviewDisabled,
@@ -268,7 +277,8 @@ async function main(): Promise<number> {
     `Files written:   ${registry.paths().length}`,
     `Typecheck:       ${outcome.typecheckClean ? "clean" : `${outcome.outstandingDiagnostics.length} error(s)`}`,
     `Tests:           ${outcome.testsPassed ? "passing" : "failing"}`,
-    `LLM calls:       ${totals.calls} (${totals.promptTokens + totals.completionTokens} tokens)`,
+    `LLM calls:       ${totals.calls} (${totals.promptTokens + totals.completionTokens} tokens)` +
+      (totals.cacheHits > 0 ? `, ${totals.cacheHits} served from cache` : ""),
     `  plan     ${byPhase.plan.calls} call(s), ${byPhase.plan.promptTokens + byPhase.plan.completionTokens} tokens`,
     `  generate ${byPhase.generate.calls} call(s), ${byPhase.generate.promptTokens + byPhase.generate.completionTokens} tokens`,
     `  repair   ${byPhase.repair.calls} call(s), ${byPhase.repair.promptTokens + byPhase.repair.completionTokens} tokens`,

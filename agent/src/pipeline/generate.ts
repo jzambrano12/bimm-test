@@ -1,5 +1,6 @@
 import type OpenAI from "openai";
 import type { ArtifactRegistry } from "../context/artifacts.ts";
+import type { PromptCache } from "../llm/cache.ts";
 import { completeStructured } from "../llm/structured.ts";
 import type { UsageLedger } from "../llm/usage.ts";
 import {
@@ -80,6 +81,7 @@ export interface GenerationContext {
   readonly tasksById: ReadonlyMap<string, PlannedTask>;
   readonly registry: ArtifactRegistry;
   readonly fs: ProjectFs;
+  readonly cache: PromptCache;
 }
 
 /**
@@ -141,6 +143,7 @@ export async function generateTask(
     user: buildGeneratorUser(task, buildGeneratorContext(task, context)),
     schema: GenerationResult,
     schemaName: "GenerationResult",
+    cache: context.cache,
   });
 
   const files = result.files.map((file) => ({
@@ -201,6 +204,7 @@ export async function repairTask(
     ),
     schema: GenerationResult,
     schemaName: "GenerationResult",
+    cache: context.cache,
   });
 
   const files = result.files.map((file) => ({

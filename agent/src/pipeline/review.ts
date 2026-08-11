@@ -82,6 +82,7 @@ export async function reviewBuild(
     user: buildReviewerUser({ requirements: ordered.plan.requirements, spec, files }),
     schema: ReviewVerdict,
     schemaName: "ReviewVerdict",
+    cache: context.cache,
   });
 
   const audited = auditFindings(verdict.findings, ordered.plan.requirements);

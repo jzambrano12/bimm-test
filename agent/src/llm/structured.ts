@@ -2,6 +2,7 @@ import OpenAI, { APIError } from "openai";
 import { zodResponseFormat } from "openai/helpers/zod";
 import { z } from "zod";
 import type { ChatCompletionCreateParamsNonStreaming } from "openai/resources/chat/completions";
+import type { PromptCache } from "./cache.ts";
 import { LlmError, toLlmError } from "./complete.ts";
 import type { LlmPhase, UsageLedger } from "./usage.ts";
 
@@ -16,6 +17,7 @@ export interface StructuredRequest<T> {
   /** Schema name sent to the provider; also used in error messages. */
   readonly schemaName: string;
   readonly temperature?: number;
+  readonly cache?: PromptCache;
 }
 
 /**
@@ -112,6 +114,19 @@ export async function completeStructured<T>(
     { role: "user" as const, content: request.user },
   ];
 
+  const cacheKey = [request.model, request.schemaName, request.system, request.user];
+  const cached = await request.cache?.get(cacheKey);
+
+  if (cached !== undefined) {
+    const replayed = parse(cached, request);
+    if (replayed.ok) {
+      ledger.recordCacheHit(request.phase);
+      return replayed.value;
+    }
+    // A cached response that no longer validates belongs to an older schema.
+    // Fall through and pay for a fresh one rather than failing on our own stale data.
+  }
+
   let raw: string;
   try {
     raw = await callOnce(client, ledger, request.phase, {
@@ -141,7 +156,10 @@ export async function completeStructured<T>(
   }
 
   const firstAttempt = parse(raw, request);
-  if (firstAttempt.ok) return firstAttempt.value;
+  if (firstAttempt.ok) {
+    await request.cache?.set(cacheKey, raw);
+    return firstAttempt.value;
+  }
 
   // Layer 3: one correction round. The model sees exactly what it got wrong,
   // which is far more effective than re-rolling the same prompt and hoping.
@@ -162,7 +180,10 @@ export async function completeStructured<T>(
   });
 
   const secondAttempt = parse(corrected, request);
-  if (secondAttempt.ok) return secondAttempt.value;
+  if (secondAttempt.ok) {
+    await request.cache?.set(cacheKey, corrected);
+    return secondAttempt.value;
+  }
 
   throw new StructuredOutputError(
     `${request.model} could not produce a valid ${request.schemaName} after one correction round.\n` +

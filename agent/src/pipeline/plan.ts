@@ -1,4 +1,5 @@
 import type OpenAI from "openai";
+import type { PromptCache } from "../llm/cache.ts";
 import { completeStructured } from "../llm/structured.ts";
 import type { UsageLedger } from "../llm/usage.ts";
 import { PLANNER_SYSTEM, buildPlannerUser } from "../prompts/planner.ts";
@@ -220,6 +221,7 @@ export interface PlanRequest {
   readonly model: string;
   readonly spec: string;
   readonly contract: string;
+  readonly cache: PromptCache;
 }
 
 /**
@@ -245,6 +247,7 @@ export async function createPlan(
     user,
     schema: TaskPlan,
     schemaName: "TaskPlan",
+    cache: request.cache,
   });
 
   try {
@@ -263,6 +266,7 @@ export async function createPlan(
         `Return a corrected plan. Keep every task that was fine.`,
       schema: TaskPlan,
       schemaName: "TaskPlan",
+      cache: request.cache,
     });
 
     return validateAndOrder(corrected, request.spec);
