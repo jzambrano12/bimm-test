@@ -3,6 +3,7 @@ import { resolve } from "node:path";
 import { loadConfig, ConfigError } from "./config.ts";
 import { createLlmClient, resolveModels, ModelResolutionError } from "./llm/client.ts";
 import { LlmError } from "./llm/complete.ts";
+import { boilerplateRoot, scaffold, ScaffoldError } from "./tools/scaffold.ts";
 
 const USAGE = `
 car-inventory-agent — spec-driven code generation into a React + TS boilerplate
@@ -162,7 +163,23 @@ async function main(): Promise<number> {
     )}\n`,
   );
 
-  // Pipeline wiring lands with the planner (ticket 7).
+  // --dry-run stops before any filesystem work: the contract digest is read
+  // from the pristine boilerplate, so planning never needs the copy to exist.
+  if (!options.dryRun) {
+    const scaffolded = await scaffold({
+      sourceRoot: boilerplateRoot(),
+      targetRoot: options.outputDir,
+      resume: options.resume,
+    });
+    process.stdout.write(
+      scaffolded.reused
+        ? `reusing existing app at ${options.outputDir}\n`
+        : `scaffolded ${scaffolded.entriesCopied} boilerplate entries into ${options.outputDir}` +
+            `${scaffolded.nodeModulesPreserved ? " (node_modules preserved)" : ""}\n`,
+    );
+  }
+
+  // Planning and generation land with the planner (ticket 7).
   return 0;
 }
 
@@ -174,6 +191,10 @@ const exitCode = await main().catch((error: unknown) => {
   if (error instanceof ConfigError || error instanceof ModelResolutionError) {
     process.stderr.write(`configuration error: ${error.message}\n`);
     return 78; // EX_CONFIG
+  }
+  if (error instanceof ScaffoldError) {
+    process.stderr.write(`scaffold error: ${error.message}\n`);
+    return 73; // EX_CANTCREAT
   }
   if (error instanceof LlmError) {
     process.stderr.write(`provider error: ${error.message}\n`);

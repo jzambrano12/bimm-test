@@ -1,0 +1,162 @@
+import { cp, mkdir, readdir, rm, stat, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+
+/**
+ * Everything the generated app needs, named explicitly.
+ *
+ * An allowlist rather than "copy everything except…" for one structural reason:
+ * the default output directory lives *inside* the boilerplate root, so a
+ * recursive copy with exclusions would copy the output into itself the moment
+ * an exclusion pattern was wrong. Naming what goes in makes that impossible
+ * instead of unlikely.
+ *
+ * Deliberately absent: README.md (describes the challenge, not the app),
+ * .env.example (the app needs no keys — MSW mocks the API), and the agent
+ * workspace itself.
+ */
+const BOILERPLATE_CONTENTS: readonly string[] = [
+  "index.html",
+  "package.json",
+  "package-lock.json",
+  "tsconfig.json",
+  "vite.config.ts",
+  "vitest.config.ts",
+  "vite-env.d.ts",
+  ".gitignore",
+  "public",
+  "src",
+];
+
+/**
+ * Written into every generated app. Its presence is what authorises a
+ * destructive reset on a later run — see assertSafeToReplace.
+ */
+const MARKER_FILE = ".agent-generated";
+
+/** Preserved across resets purely to keep iteration fast. */
+const PRESERVED_ON_RESET: readonly string[] = ["node_modules"];
+
+export class ScaffoldError extends Error {}
+
+/** The boilerplate root: the directory containing this agent workspace. */
+export function boilerplateRoot(): string {
+  return resolve(import.meta.dirname, "..", "..", "..");
+}
+
+export interface ScaffoldOptions {
+  readonly sourceRoot: string;
+  readonly targetRoot: string;
+  /** Reuse an existing generated app instead of resetting it. */
+  readonly resume: boolean;
+}
+
+export interface ScaffoldResult {
+  readonly entriesCopied: number;
+  readonly reused: boolean;
+  readonly nodeModulesPreserved: boolean;
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Refuses to clobber a directory this agent did not create.
+ *
+ * `--output` is a path from a command line, and the reset below is recursive.
+ * An empty directory or one carrying our marker is fair game; anything else is
+ * someone's work, and the agent declines rather than guessing.
+ */
+async function assertSafeToReplace(targetRoot: string): Promise<void> {
+  if (await pathExists(join(targetRoot, MARKER_FILE))) return;
+
+  const entries = await readdir(targetRoot);
+  const meaningful = entries.filter((entry) => entry !== ".DS_Store");
+  if (meaningful.length === 0) return;
+
+  throw new ScaffoldError(
+    `${targetRoot} already exists, is not empty, and was not created by this agent ` +
+      `(no ${MARKER_FILE} marker). Refusing to overwrite it.\n` +
+      `Pass a different --output, add --resume to generate into it as-is, or remove it yourself.`,
+  );
+}
+
+async function resetManaged(targetRoot: string): Promise<boolean> {
+  const entries = await readdir(targetRoot);
+  let preservedAny = false;
+
+  for (const entry of entries) {
+    if (PRESERVED_ON_RESET.includes(entry)) {
+      preservedAny = true;
+      continue;
+    }
+    await rm(join(targetRoot, entry), { recursive: true, force: true });
+  }
+
+  return preservedAny;
+}
+
+/**
+ * Materialises the boilerplate into the output directory. No LLM involved:
+ * copying known files is a job for a filesystem, and spending a model call on
+ * it would be theatre.
+ */
+export async function scaffold(options: ScaffoldOptions): Promise<ScaffoldResult> {
+  const { sourceRoot, targetRoot, resume } = options;
+
+  if (resolve(sourceRoot) === resolve(targetRoot)) {
+    throw new ScaffoldError(
+      `--output must not be the boilerplate root itself (${targetRoot}); ` +
+        `the agent generates into a copy so the template stays pristine.`,
+    );
+  }
+
+  const targetExists = await pathExists(targetRoot);
+
+  if (resume) {
+    if (!targetExists) {
+      throw new ScaffoldError(`--resume was passed but ${targetRoot} does not exist.`);
+    }
+    if (!(await pathExists(join(targetRoot, "package.json")))) {
+      throw new ScaffoldError(
+        `--resume was passed but ${targetRoot} has no package.json — it is not a generated app.`,
+      );
+    }
+    return { entriesCopied: 0, reused: true, nodeModulesPreserved: true };
+  }
+
+  let nodeModulesPreserved = false;
+  if (targetExists) {
+    await assertSafeToReplace(targetRoot);
+    nodeModulesPreserved = await resetManaged(targetRoot);
+  } else {
+    await mkdir(targetRoot, { recursive: true });
+  }
+
+  let entriesCopied = 0;
+  for (const entry of BOILERPLATE_CONTENTS) {
+    const source = join(sourceRoot, entry);
+    if (!(await pathExists(source))) {
+      throw new ScaffoldError(
+        `Boilerplate is missing ${entry} (looked in ${sourceRoot}). ` +
+          `The agent expects the provided project layout.`,
+      );
+    }
+    await cp(source, join(targetRoot, entry), { recursive: true });
+    entriesCopied += 1;
+  }
+
+  await writeFile(
+    join(targetRoot, MARKER_FILE),
+    `Generated by car-inventory-agent from ${sourceRoot}\n` +
+      `This marker authorises the agent to reset this directory on a later run.\n`,
+    "utf8",
+  );
+
+  return { entriesCopied, reused: false, nodeModulesPreserved };
+}
