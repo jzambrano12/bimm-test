@@ -6,56 +6,55 @@
     "planner": "gemini-flash-lite-latest",
     "worker": "gemini-flash-lite-latest"
   },
-  "durationMs": 76801,
+  "durationMs": 89865,
   "result": {
     "typecheckClean": true,
-    "testsPassed": false,
+    "testsPassed": true,
     "filesWritten": [
       "src/hooks/useCars.ts",
-      "src/components/ResponsiveCarImage.tsx",
       "src/components/CarCard.tsx",
       "src/components/AddCarForm.tsx",
-      "src/hooks/useCarFilterSort.ts",
-      "src/components/CarInventory.tsx",
-      "src/App.tsx",
-      "src/__tests__/CarInventory.test.tsx"
+      "src/components/InventoryControls.tsx",
+      "src/components/CarInventoryList.tsx",
+      "src/__tests__/CarInventoryList.test.tsx",
+      "src/App.tsx"
     ]
   },
   "usage": {
-    "calls": 15,
+    "calls": 14,
     "cacheHits": 0,
-    "promptTokens": 81366,
-    "completionTokens": 14148,
+    "promptTokens": 71615,
+    "completionTokens": 13729,
     "byPhase": {
       "plan": {
         "calls": 1,
         "cacheHits": 0,
-        "promptTokens": 3517,
-        "completionTokens": 2101
+        "promptTokens": 3572,
+        "completionTokens": 2033
       },
       "generate": {
-        "calls": 8,
+        "calls": 7,
         "cacheHits": 0,
-        "promptTokens": 28281,
-        "completionTokens": 5168
+        "promptTokens": 25694,
+        "completionTokens": 5126
       },
       "repair": {
         "calls": 5,
         "cacheHits": 0,
-        "promptTokens": 43524,
-        "completionTokens": 5953
+        "promptTokens": 36429,
+        "completionTokens": 5730
       },
       "review": {
         "calls": 1,
         "cacheHits": 0,
-        "promptTokens": 6044,
-        "completionTokens": 926
+        "promptTokens": 5920,
+        "completionTokens": 840
       }
     }
   },
   "cost": {
     "priced": true,
-    "estimatedUsd": 0.0598,
+    "estimatedUsd": 0.0558,
     "basis": "$0.3/M input, $2.5/M output. Free tier cost is $0.00"
   },
   "cache": {
@@ -67,7 +66,7 @@
   "tasks": [
     {
       "taskId": "use-cars-hook",
-      "title": "Create useCars data hook",
+      "title": "Create useCars and useAddCar data hooks",
       "files": [
         "src/hooks/useCars.ts"
       ],
@@ -77,41 +76,8 @@
       "note": "compiled after 1 repair attempt(s)"
     },
     {
-      "taskId": "car-image",
-      "title": "Create ResponsiveCarImage component",
-      "files": [
-        "src/components/ResponsiveCarImage.tsx"
-      ],
-      "status": "generated",
-      "repairAttempts": 0,
-      "unresolved": [],
-      "note": ""
-    },
-    {
-      "taskId": "car-form",
-      "title": "Create AddCarForm component",
-      "files": [
-        "src/components/AddCarForm.tsx"
-      ],
-      "status": "generated",
-      "repairAttempts": 0,
-      "unresolved": [],
-      "note": ""
-    },
-    {
-      "taskId": "car-filter-sort",
-      "title": "Create filter and sort utility / hook",
-      "files": [
-        "src/hooks/useCarFilterSort.ts"
-      ],
-      "status": "generated",
-      "repairAttempts": 0,
-      "unresolved": [],
-      "note": ""
-    },
-    {
       "taskId": "car-card",
-      "title": "Create CarCard presentational component",
+      "title": "Create CarCard presentational component with responsive image",
       "files": [
         "src/components/CarCard.tsx"
       ],
@@ -121,10 +87,10 @@
       "note": "compiled after 1 repair attempt(s)"
     },
     {
-      "taskId": "car-inventory",
-      "title": "Create CarInventory container component",
+      "taskId": "add-car-form",
+      "title": "Create AddCarForm component with validation and feedback",
       "files": [
-        "src/components/CarInventory.tsx"
+        "src/components/AddCarForm.tsx"
       ],
       "status": "generated",
       "repairAttempts": 0,
@@ -132,10 +98,21 @@
       "note": ""
     },
     {
-      "taskId": "app-shell",
-      "title": "Compose CarInventory into the app shell",
+      "taskId": "inventory-controls",
+      "title": "Create InventoryControls component for search and sort",
       "files": [
-        "src/App.tsx"
+        "src/components/InventoryControls.tsx"
+      ],
+      "status": "generated",
+      "repairAttempts": 0,
+      "unresolved": [],
+      "note": ""
+    },
+    {
+      "taskId": "car-inventory-list",
+      "title": "Create CarInventoryList container component",
+      "files": [
+        "src/components/CarInventoryList.tsx"
       ],
       "status": "generated",
       "repairAttempts": 0,
@@ -144,89 +121,98 @@
     },
     {
       "taskId": "car-inventory-test",
-      "title": "Test CarInventory list, search, sort, and add mutation",
+      "title": "Test CarInventoryList features and GraphQL interactions",
       "files": [
-        "src/__tests__/CarInventory.test.tsx"
+        "src/__tests__/CarInventoryList.test.tsx"
       ],
-      "status": "degraded",
+      "status": "repaired",
       "repairAttempts": 3,
-      "unresolved": [
-        "tests still failing in src/__tests__/CarInventory.test.tsx"
+      "unresolved": [],
+      "note": "repaired after failing tests (round 3)"
+    },
+    {
+      "taskId": "app-shell",
+      "title": "Compose CarInventoryList into App shell",
+      "files": [
+        "src/App.tsx"
       ],
-      "note": "tests fail after 3 round(s). If the test is correct, the defect is in a file this task does not own: car-inventory"
+      "status": "generated",
+      "repairAttempts": 0,
+      "unresolved": [],
+      "note": ""
     }
   ],
   "review": {
-    "assessment": "The application fully satisfies all core requirements, including inventory display, responsive images, search/filtering, sorting, mutation form handling, data isolation, and thorough testing. Optional features like fetching a single car and filtering by year are omitted, while the reusable filter/sort hook optional feature is implemented.",
+    "assessment": "The application successfully implements all mandatory core requirements, including inventory display, responsive device-based photo switching, search filtering, sorting, form validation and submission, and GraphQL custom hooks with tests. Optional nice-to-have features are omitted without compromising functionality.",
     "downgraded": [],
     "findings": [
       {
         "requirementId": "see-inventory",
         "status": "satisfied",
-        "evidence": "src/components/CarInventory.tsx and src/components/CarCard.tsx load all cars in a Grid of cards showing make, model, year, colour, and photo, handling loading with CircularProgress and errors with Alert.",
+        "evidence": "src/components/CarInventoryList.tsx renders cars in a Grid when loaded, and CarCard.tsx shows make, model, year, colour, and photo.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "responsive-photos",
         "status": "satisfied",
-        "evidence": "src/components/ResponsiveCarImage.tsx uses useMediaQuery('(min-width: 1024px)') for desktop, useMediaQuery('(min-width: 641px) and (max-width: 1023px)') for tablet, and defaults to mobile for up to 640px.",
+        "evidence": "src/components/CarCard.tsx uses useMediaQuery with '(min-width: 1024px)' and '(min-width: 641px) and (max-width: 1023px)' to dynamically select desktop, tablet, or mobile image URLs.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "find-specific-car",
+        "requirementId": "find-car",
         "status": "satisfied",
-        "evidence": "src/hooks/useCarFilterSort.ts filters by model case-insensitively using normalizedSearch.includes and src/components/CarInventory.tsx displays 'No cars match your search.' when the filtered list is empty.",
+        "evidence": "src/components/CarInventoryList.tsx filters cars case-insensitively by model using toLowerCase() and displays a message when zero cars match.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "reorder-list",
         "status": "satisfied",
-        "evidence": "src/hooks/useCarFilterSort.ts sorts by year-desc (newest first: b.year - a.year) and make-asc (alphabetical using localeCompare).",
+        "evidence": "src/components/CarInventoryList.tsx implements sorting via localeCompare for make and newest-first (b.year - a.year) for year.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "add-car",
         "status": "satisfied",
-        "evidence": "src/components/AddCarForm.tsx and src/hooks/useCars.ts collect fields, validate for emptiness and plausible year, submit via useMutation, show loading/in-flight feedback, and update the list without page reload.",
+        "evidence": "src/components/AddCarForm.tsx collects make, model, year, and colour, validates non-empty and plausible year, submits via the API, and shows feedback.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "keep-data-access-isolated",
+        "requirementId": "data-access-hook",
         "status": "satisfied",
-        "evidence": "src/hooks/useCars.ts encapsulates useQuery and useMutation so components only deal with data returned by the hook.",
+        "evidence": "src/hooks/useCars.ts encapsulates useQuery and useMutation so components do not talk to GraphQL directly.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "tests",
         "status": "satisfied",
-        "evidence": "src/__tests__/CarInventory.test.tsx covers list rendering, search filtering, sorting reordering, and form mutation submission using Apollo's MockedProvider for GraphQL-level mocks.",
+        "evidence": "src/__tests__/CarInventoryList.test.tsx covers list rendering, searching, sorting, and form submission using MockedProvider.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "fetch-single-car",
         "status": "missing",
-        "evidence": "No single car fetch by ID is implemented.",
+        "evidence": "No single car fetching logic or query is implemented as it is an optional requirement.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
         "requirementId": "filter-by-year",
         "status": "missing",
-        "evidence": "Filtering specifically by year is not implemented (only model search and year sort exist).",
+        "evidence": "No year filtering capability is implemented as it is an optional requirement.",
         "remediationTitle": "",
         "remediationFiles": []
       },
       {
-        "requirementId": "reusable-filter-hook",
-        "status": "satisfied",
-        "evidence": "src/hooks/useCarFilterSort.ts provides combined filtering and sorting logic in a dedicated reusable hook separate from data-fetching.",
+        "requirementId": "reusable-filter-sort-hook",
+        "status": "missing",
+        "evidence": "Filtering and sorting logic resides inside CarInventoryList.tsx rather than a separate reusable hook.",
         "remediationTitle": "",
         "remediationFiles": []
       }
@@ -238,6 +224,10 @@
       },
       {
         "requirementId": "filter-by-year",
+        "reason": "optional requirement — reported, not repaired"
+      },
+      {
+        "requirementId": "reusable-filter-sort-hook",
         "reason": "optional requirement — reported, not repaired"
       }
     ]

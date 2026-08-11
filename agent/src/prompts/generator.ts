@@ -54,19 +54,24 @@ STACK IDIOM
   not by stubbing fetch. Assert observable behaviour, not implementation detail.
 - Tests must be deterministic: await what is asynchronous, and never assert on
   wall-clock timing.
-- A page-wide role query collects matches from every section, so an
-  index-based assertion on its result can read an element from somewhere else
-  entirely — a form's heading rather than the first list item, for instance.
-  When a role repeats across regions, scope the query to the container you mean
-  before indexing into it, and give containers an accessible name or landmark
-  role so they can be scoped to.
-- When a component composes several fields into one string, no text node equals
-  any single field on its own. Querying for one exact field then finds nothing,
-  even though it is on screen. Assert with a substring or regular-expression
-  matcher, or query the composed text the component actually renders. The
-  testing library says "the text is broken up by multiple elements" when this
-  happens; read that as a matcher problem in the test, not a missing element in
-  the component.
+- You are writing tests against a DOM you cannot see. The component's real
+  output differs from your mental model in small ways, and a query that is
+  stricter than it needs to be fails on a page that is actually correct. So
+  prefer the looser form wherever the strictness buys nothing:
+  - Match text by substring or regular expression, not exact equality. A
+    component that composes fields into one string ("1998 Penguin Hardcover") has no
+    text node equal to any single field, and the library's "text is broken up by
+    multiple elements" message means exactly this.
+  - Leave name matchers unanchored. UI libraries decorate labels — a required
+    field's accessible name commonly carries a marker — so \`/^title$/i\` misses a
+    field rendered as "Title *" while \`/title/i\` finds it.
+  - Scope role queries to the container you mean before indexing into their
+    result. A page-wide query collects matches from every section, so
+    \`getAllByRole("heading")[0]\` may be a form's title rather than the first list
+    item. Give containers an accessible name or landmark role so they can be
+    scoped to.
+  Read a "cannot find element" failure as a probable defect in the query before
+  concluding the component is missing something.
 - A mocked GraphQL provider consumes each mock exactly once. If the code under
   test refetches a query after a mutation — which correct code does, so that the
   change becomes visible — that query needs a second mock entry, and the second

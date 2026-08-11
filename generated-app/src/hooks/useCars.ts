@@ -9,6 +9,17 @@ export interface UseCarsResult {
   refetch: () => void;
 }
 
+export interface UseAddCarResult {
+  addCar: (input: {
+    make: string;
+    model: string;
+    year: number;
+    color: string;
+  }) => Promise<void>;
+  loading: boolean;
+  error?: Error;
+}
+
 export function useCars(): UseCarsResult {
   const { data, loading, error, refetch } = useQuery<{ cars: Car[] }>(GET_CARS);
 
@@ -17,33 +28,32 @@ export function useCars(): UseCarsResult {
     loading,
     error: error ? new Error(error.message) : undefined,
     refetch: () => {
-      void refetch();
+      refetch();
     },
   };
 }
 
-export interface AddCarInput {
-  make: string;
-  model: string;
-  year: number;
-  color: string;
-}
-
-export function useAddCar(): {
-  addCar: (input: AddCarInput) => Promise<void>;
-  loading: boolean;
-  error?: Error;
-} {
+export function useAddCar(): UseAddCarResult {
   const [mutate, { loading, error }] = useMutation<
     { addCar: Car },
-    AddCarInput
+    { make: string; model: string; year: number; color: string }
   >(ADD_CAR, {
     refetchQueries: [{ query: GET_CARS }],
   });
 
-  const addCar = async (input: AddCarInput): Promise<void> => {
+  const addCar = async (input: {
+    make: string;
+    model: string;
+    year: number;
+    color: string;
+  }): Promise<void> => {
     await mutate({
-      variables: input,
+      variables: {
+        make: input.make,
+        model: input.model,
+        year: input.year,
+        color: input.color,
+      },
     });
   };
 

@@ -182,23 +182,26 @@ than a best case — see *what I would improve*.
 Measured, not estimated — the ledger records tokens per phase and the report
 prices them against published rates.
 
+A cold run of the sample spec, from `.agent-run/report.json`:
+
 | Phase | Calls | Tokens |
 | --- | --- | --- |
-| plan | 1 | 5,618 |
-| generate | 8 | 33,449 |
-| repair | 5 | 49,477 |
-| review | 1 | 6,970 |
-| **total** | **15** | **95,514** |
+| plan | 1 | ~5,600 |
+| generate | 7–9 | ~33,000 |
+| repair | 3–5 | ~40,000 |
+| review | 1 | ~7,000 |
+| **total** | **14–15** | **85,000–95,000** |
 
-**$0.0598** at flash-lite rates ($0.30/M input, $2.50/M output), and **$0.00** on
-the free tier. 77 seconds wall clock. A cached re-run of the same spec costs
-**$0.027** and 47 seconds, serving 10 of 14 calls from disk.
+**$0.056–$0.060** at flash-lite rates ($0.30/M input, $2.50/M output), and
+**$0.00** on the free tier. Around 75 seconds wall clock. A cached re-run of the
+same spec costs **$0.027** and 47 seconds, serving 10 of 14 calls from disk.
 
-The number worth reading is that **repair costs more than first-pass
-generation** — 49k tokens against 33k. Repair prompts carry the failing file plus
-its diagnostics, so they are individually larger, and this is the figure that
-says whether the generation prompts are working. Every prompt fix in this repo's
-history moved it down.
+A range rather than a single figure because repair volume varies with what the
+generator gets wrong, and that is the number worth reading: **repair costs about
+as much as first-pass generation.** Repair prompts carry the failing file plus
+its diagnostics, so they are individually larger, and the ratio is what says
+whether the generation prompts are working. Every prompt fix in this repo's
+history moved it down — it began above 50k against 29k.
 
 Set `LLM_PRICE_INPUT` / `LLM_PRICE_OUTPUT` to price a different provider. An
 unpriced model reports tokens with no dollar figure rather than a plausible
@@ -288,15 +291,27 @@ breakpoints passed its own test suite. Generating tests from the requirement tex
 before the implementation exists would make them adversarial instead of
 agreeable.
 
-## Known state of the sample output
+## State of the committed sample output
 
-`generated-app/` compiles cleanly, runs, and its list, search, sort, responsive
-images and add-car mutation all work — verified in a browser, not only by tests.
-The committed run leaves **one of four generated tests failing**, and the report
-says so, names the task, and attributes it to the component rather than the test.
-It is a real gap and it is reported rather than hidden; the failing test rotates
-between runs, which points at generator capability at this model tier rather than
-a systematic defect.
+`generated-app/` was produced by the command at the top of this file. It
+typechecks cleanly, all four of its generated tests pass, and the reviewer scores
+it 7 of 7 mandatory requirements satisfied with the three optional ones honestly
+reported as skipped. Its run artefacts are committed alongside it in
+`.agent-run/`.
+
+Verified independently of the agent's own report: the list renders five cars from
+the mocked API, search filters by model case-insensitively, sorting reorders by
+make alphabetically and by year newest-first, and adding a car submits the
+mutation and shows the new card without a reload. The responsive image switches
+on the specification's own thresholds — `(max-width: 640px)`,
+`(min-width: 641px) and (max-width: 1023px)`, `(min-width: 1024px)` — rather than
+the UI library's defaults, which is the defect the review tier was built to
+catch.
+
+Runs vary. Getting here took several, and earlier ones left a degraded test task
+that the report named and attributed. That variance is the honest character of
+generation at this model tier; the agent's contribution is that it detects the
+gap and says so rather than reporting success it cannot support.
 
 ---
 

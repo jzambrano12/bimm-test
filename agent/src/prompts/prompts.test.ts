@@ -32,6 +32,11 @@ describe("prompt hygiene", () => {
         "search bar",
         "sort by year",
         "colour",
+        "color",
+        "toyota",
+        "camry",
+        "honda",
+        "tesla",
       ];
 
       for (const term of forbidden) {
