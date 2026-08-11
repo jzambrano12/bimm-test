@@ -14,8 +14,9 @@ export class LlmError extends Error {
   constructor(
     message: string,
     readonly retryable: boolean,
+    options?: ErrorOptions,
   ) {
-    super(message);
+    super(message, options);
   }
 }
 
@@ -27,7 +28,7 @@ export class LlmError extends Error {
  * per-minute burst. Retrying that in our own loop just burns wall-clock, so it
  * surfaces as non-retryable with the provider's own explanation attached.
  */
-function wrapError(error: unknown, model: string): LlmError {
+export function toLlmError(error: unknown, model: string): LlmError {
   if (error instanceof APIError) {
     const status = error.status ?? 0;
 
@@ -37,23 +38,29 @@ function wrapError(error: unknown, model: string): LlmError {
           `On a free tier this usually means the daily request quota is spent — ` +
           `check https://aistudio.google.com/ or set LLM_MODEL to a lighter model.\n  ${error.message}`,
         false,
+        { cause: error },
       );
     }
     if (status === 401 || status === 403) {
-      return new LlmError(`Provider rejected the API key (${status}).\n  ${error.message}`, false);
+      return new LlmError(`Provider rejected the API key (${status}).\n  ${error.message}`, false, {
+        cause: error,
+      });
     }
     if (status === 404) {
       return new LlmError(
         `Model ${model} not found at this endpoint (404). The startup preflight passed, ` +
           `so the catalog and the chat endpoint disagree — set LLM_MODEL explicitly.\n  ${error.message}`,
         false,
+        { cause: error },
       );
     }
-    return new LlmError(`Provider error ${status} for ${model}: ${error.message}`, status >= 500);
+    return new LlmError(`Provider error ${status} for ${model}: ${error.message}`, status >= 500, {
+      cause: error,
+    });
   }
 
   const detail = error instanceof Error ? error.message : String(error);
-  return new LlmError(`Request to ${model} failed: ${detail}`, true);
+  return new LlmError(`Request to ${model} failed: ${detail}`, true, { cause: error });
 }
 
 /**
@@ -78,7 +85,7 @@ export async function completeText(
       ],
     });
   } catch (error) {
-    throw wrapError(error, request.model);
+    throw toLlmError(error, request.model);
   }
 
   ledger.record(request.phase, {
