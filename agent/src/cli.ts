@@ -1,9 +1,35 @@
 #!/usr/bin/env node
+import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { loadConfig, ConfigError } from "./config.ts";
+import { buildContractDigest, ContractError, renderContract } from "./context/repoMap.ts";
 import { createLlmClient, resolveModels, ModelResolutionError } from "./llm/client.ts";
 import { LlmError } from "./llm/complete.ts";
+import { StructuredOutputError } from "./llm/structured.ts";
+import { UsageLedger } from "./llm/usage.ts";
+import { createPlan, PlanValidationError, renderPlan } from "./pipeline/plan.ts";
 import { boilerplateRoot, scaffold, ScaffoldError } from "./tools/scaffold.ts";
+
+const ledger = new UsageLedger();
+
+/** Progress goes to stderr so stdout stays the plan and the report. */
+function log(label: string, detail: string): void {
+  process.stderr.write(`  ${label.padEnd(14)} ${detail}\n`);
+}
+
+async function readSpec(path: string): Promise<string> {
+  let raw: string;
+  try {
+    raw = await readFile(path, "utf8");
+  } catch {
+    throw new UsageError(`Cannot read spec file: ${path}`);
+  }
+
+  if (raw.trim() === "") {
+    throw new UsageError(`Spec file is empty: ${path}`);
+  }
+  return raw;
+}
 
 const USAGE = `
 car-inventory-agent — spec-driven code generation into a React + TS boilerplate
@@ -136,6 +162,7 @@ async function main(): Promise<number> {
     return 0;
   }
 
+  const spec = await readSpec(options.specPath);
   const config = loadConfig();
   const client = createLlmClient(config);
 
@@ -143,43 +170,46 @@ async function main(): Promise<number> {
   // model in one cheap request, so a bad key fails in two seconds rather than
   // halfway through a run that has already written files.
   const models = await resolveModels(client, config);
+  const sourceRoot = boilerplateRoot();
 
-  process.stdout.write(
-    `${JSON.stringify(
-      {
-        spec: options.specPath,
-        output: options.outputDir,
-        dryRun: options.dryRun,
-        resume: options.resume,
-        provider: config.baseUrl,
-        workerModel: models.worker + (models.workerAutoSelected ? " (auto-selected)" : ""),
-        plannerModel: models.planner,
-        maxRepairs: options.maxRepairsOverride ?? config.maxRepairs,
-        concurrency: options.concurrencyOverride ?? config.concurrency,
-        cache: options.cacheDisabled ? false : config.cacheEnabled,
-      },
-      null,
-      2,
-    )}\n`,
-  );
+  log("provider", config.baseUrl);
+  log("planner model", models.planner);
+  log("worker model", models.worker + (models.workerAutoSelected ? " (auto-selected)" : ""));
+  log("spec", options.specPath);
 
-  // --dry-run stops before any filesystem work: the contract digest is read
-  // from the pristine boilerplate, so planning never needs the copy to exist.
-  if (!options.dryRun) {
-    const scaffolded = await scaffold({
-      sourceRoot: boilerplateRoot(),
-      targetRoot: options.outputDir,
-      resume: options.resume,
-    });
-    process.stdout.write(
-      scaffolded.reused
-        ? `reusing existing app at ${options.outputDir}\n`
-        : `scaffolded ${scaffolded.entriesCopied} boilerplate entries into ${options.outputDir}` +
-            `${scaffolded.nodeModulesPreserved ? " (node_modules preserved)" : ""}\n`,
-    );
+  // Read from the pristine boilerplate rather than the copy, so planning never
+  // depends on the output directory existing. That is what lets --dry-run do
+  // no filesystem work at all.
+  const digest = await buildContractDigest(sourceRoot);
+  const contract = renderContract(digest);
+
+  const ordered = await createPlan(client, ledger, {
+    model: models.planner,
+    spec,
+    contract,
+  });
+
+  process.stdout.write(`\n${renderPlan(ordered)}\n`);
+
+  if (options.dryRun) {
+    process.stdout.write("\ndry run: stopping before generation\n");
+    return 0;
   }
 
-  // Planning and generation land with the planner (ticket 7).
+  const scaffolded = await scaffold({
+    sourceRoot,
+    targetRoot: options.outputDir,
+    resume: options.resume,
+  });
+  log(
+    "scaffold",
+    scaffolded.reused
+      ? `reusing ${options.outputDir}`
+      : `${scaffolded.entriesCopied} entries into ${options.outputDir}` +
+          `${scaffolded.nodeModulesPreserved ? " (node_modules preserved)" : ""}`,
+  );
+
+  // Generation lands with the executor (ticket 8).
   return 0;
 }
 
@@ -188,9 +218,17 @@ const exitCode = await main().catch((error: unknown) => {
     process.stderr.write(`error: ${error.message}\n\n${USAGE}`);
     return 2;
   }
-  if (error instanceof ConfigError || error instanceof ModelResolutionError) {
+  if (
+    error instanceof ConfigError ||
+    error instanceof ModelResolutionError ||
+    error instanceof ContractError
+  ) {
     process.stderr.write(`configuration error: ${error.message}\n`);
     return 78; // EX_CONFIG
+  }
+  if (error instanceof PlanValidationError || error instanceof StructuredOutputError) {
+    process.stderr.write(`planning failed: ${error.message}\n`);
+    return 65; // EX_DATAERR
   }
   if (error instanceof ScaffoldError) {
     process.stderr.write(`scaffold error: ${error.message}\n`);
