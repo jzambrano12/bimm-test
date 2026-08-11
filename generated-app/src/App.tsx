@@ -1,19 +1,38 @@
-import { AppBar, Box, Toolbar, Typography } from "@mui/material";
-import { CarListView } from "@/components/CarListView";
+import { Container, Typography, Box, Paper } from "@mui/material";
+import { useCars } from "@/hooks/useCars";
+import { CarInventoryList } from "@/components/CarInventoryList";
+import { AddCarForm } from "@/components/AddCarForm";
 
 export default function App() {
+  const { cars, loading, error } = useCars();
+
   return (
-    <Box sx={{ flexGrow: 1, minHeight: "100vh", bgcolor: "background.default" }}>
-      <AppBar position="static" elevation={1}>
-        <Toolbar>
-          <Typography variant="h6" component="div" sx={{ flexGrow: 1, fontWeight: "bold" }}>
-            Car Fleet Manager
-          </Typography>
-        </Toolbar>
-      </AppBar>
-      <Box component="main">
-        <CarListView />
+    <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Box sx={{ mb: 4, display: "flex", flexDirection: "column", gap: 1 }}>
+        <Typography variant="h4" component="h1" fontWeight="bold">
+          Car Inventory Manager
+        </Typography>
+        <Typography variant="body1" color="text.secondary">
+          Manage your vehicle fleet, add new cars, and inspect specifications.
+        </Typography>
       </Box>
-    </Box>
+
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", md: "320px 1fr" },
+          gap: 4,
+          alignItems: "start",
+        }}
+      >
+        <Paper elevation={2} sx={{ p: 3 }}>
+          <AddCarForm />
+        </Paper>
+
+        <Box>
+          <CarInventoryList cars={cars} loading={loading} error={error} />
+        </Box>
+      </Box>
+    </Container>
   );
 }

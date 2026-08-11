@@ -1,33 +1,32 @@
-import { useTheme, useMediaQuery } from "@mui/material";
-import { Car } from "../types";
+import { useTheme, useMediaQuery, Box } from "@mui/material";
+import type { Car } from "@/types";
 
 export interface CarImageProps {
   car: Car;
-  alt?: string;
 }
 
-export function CarImage({ car, alt }: CarImageProps) {
+export function CarImage({ car }: CarImageProps) {
   const theme = useTheme();
-  const isMobile = useMediaQuery(theme.breakpoints.down(641));
-  const isTablet = useMediaQuery(theme.breakpoints.between(641, 1024));
+  const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
+  const isTablet = useMediaQuery(theme.breakpoints.between("sm", "md"));
 
-  let imageUrl = car.desktop;
-  if (isMobile) {
-    imageUrl = car.mobile;
+  let src = car.mobile;
+  if (isDesktop) {
+    src = car.desktop;
   } else if (isTablet) {
-    imageUrl = car.tablet;
+    src = car.tablet;
   }
 
-  const imageAlt = alt ?? `${car.year} ${car.make} ${car.model}`;
-
   return (
-    <img
-      src={imageUrl}
-      alt={imageAlt}
-      style={{
+    <Box
+      component="img"
+      src={src}
+      alt={`${car.year} ${car.make} ${car.model}`}
+      sx={{
         width: "100%",
         height: "auto",
         display: "block",
+        objectFit: "cover",
       }}
     />
   );

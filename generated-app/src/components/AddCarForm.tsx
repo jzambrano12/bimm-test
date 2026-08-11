@@ -1,32 +1,26 @@
 import { useState, type FormEvent } from "react";
 import {
   Box,
-  Button,
   TextField,
+  Button,
+  Alert,
   Typography,
   CircularProgress,
-  Alert,
 } from "@mui/material";
+import { useAddCar } from "@/hooks/useCars";
 
 export interface AddCarFormProps {
-  onAddCar: (input: {
-    make: string;
-    model: string;
-    year: number;
-    color: string;
-  }) => Promise<void>;
-  loading: boolean;
+  onCarAdded?: () => void;
 }
 
-export function AddCarForm({
-  onAddCar,
-  loading,
-}: AddCarFormProps) {
+export function AddCarForm({ onCarAdded }: AddCarFormProps) {
   const [make, setMake] = useState("");
   const [model, setModel] = useState("");
-  const [yearStr, setYearStr] = useState("");
+  const [year, setYear] = useState("");
   const [color, setColor] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
+
+  const { addCar, loading, error: mutationError } = useAddCar();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -35,110 +29,77 @@ export function AddCarForm({
     const trimmedMake = make.trim();
     const trimmedModel = model.trim();
     const trimmedColor = color.trim();
+    const parsedYear = parseInt(year, 10);
 
-    if (!trimmedMake || !trimmedModel || !yearStr.trim() || !trimmedColor) {
+    if (!trimmedMake || !trimmedModel || !trimmedColor || !year) {
       setValidationError("All fields are required.");
       return;
     }
 
-    const year = Number(yearStr);
-    const currentYear = new Date().getFullYear();
-
-    if (Number.isNaN(year) || year < 1886 || year > currentYear + 1) {
-      setValidationError(
-        `Please enter a plausible year between 1886 and ${currentYear + 1}.`
-      );
+    if (isNaN(parsedYear) || parsedYear < 1886 || parsedYear > new Date().getFullYear() + 1) {
+      setValidationError("Please enter a valid year.");
       return;
     }
 
     try {
-      await onAddCar({
+      await addCar({
         make: trimmedMake,
         model: trimmedModel,
-        year,
+        year: parsedYear,
         color: trimmedColor,
       });
+
       setMake("");
       setModel("");
-      setYearStr("");
+      setYear("");
       setColor("");
-    } catch (err) {
-      if (err instanceof Error) {
-        setValidationError(err.message);
-      } else {
-        setValidationError("An unexpected error occurred.");
-      }
+      onCarAdded?.();
+    } catch (_err) {
+      // Mutation error is captured by useAddCar and displayed below
     }
   };
 
   return (
-    <Box
-      component="form"
-      onSubmit={handleSubmit}
-      sx={{
-        display: "flex",
-        flexDirection: "column",
-        gap: 2,
-        maxWidth: 400,
-        mx: "auto",
-        p: 3,
-      }}
-    >
-      <Typography variant="h5" component="h2">
-        Add New Car
-      </Typography>
-
-      {validationError && (
-        <Alert severity="error" sx={{ mb: 1 }}>
-          {validationError}
-        </Alert>
-      )}
-
+    <Box component="form" onSubmit={handleSubmit} sx={{ display: "flex", flexDirection: "column", gap: 2, maxWidth: 400, width: "100%" }}>
+      <Typography variant="h6">Add New Car</Typography>
+      {validationError && <Alert severity="error">{validationError}</Alert>}
+      {mutationError && <Alert severity="error">{mutationError.message}</Alert>}
       <TextField
         label="Make"
         value={make}
         onChange={(e) => setMake(e.target.value)}
-        required
-        fullWidth
         disabled={loading}
+        required
       />
-
       <TextField
         label="Model"
         value={model}
         onChange={(e) => setModel(e.target.value)}
-        required
-        fullWidth
         disabled={loading}
+        required
       />
-
       <TextField
         label="Year"
         type="number"
-        value={yearStr}
-        onChange={(e) => setYearStr(e.target.value)}
-        required
-        fullWidth
+        value={year}
+        onChange={(e) => setYear(e.target.value)}
         disabled={loading}
+        required
       />
-
       <TextField
         label="Color"
         value={color}
         onChange={(e) => setColor(e.target.value)}
-        required
-        fullWidth
         disabled={loading}
+        required
       />
-
       <Button
         type="submit"
         variant="contained"
-        color="primary"
         disabled={loading}
-        sx={{ mt: 1 }}
+        startIcon={loading ? <CircularProgress size={20} color="inherit" /> : undefined}
       >
-        {loading ? <CircularProgress size={24} color="inherit" /> : "Add Car"}
+        {loading ? "Adding..." : "Add Car"}
       </Button>
     </Box>
   );

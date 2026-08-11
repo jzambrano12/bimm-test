@@ -2,37 +2,26 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MockedProvider } from "@apollo/client/testing";
 import { describe, it, expect } from "vitest";
-import { GET_CARS, ADD_CAR } from "@/graphql/queries";
-import { CarListView } from "@/components/CarListView";
-import type { Car } from "@/types";
+import { GET_CARS, ADD_CAR } from "../graphql/queries";
+import App from "../App";
 
-const mockCars: Car[] = [
+const mockCars = [
   {
     id: "1",
-    make: "Toyota",
-    model: "Camry",
-    year: 2024,
-    color: "Silver",
+    make: "Honda",
+    model: "Civic",
+    year: 2021,
+    color: "Blue",
     mobile: "https://placehold.co/640x360",
     tablet: "https://placehold.co/1023x576",
     desktop: "https://placehold.co/1440x810",
   },
   {
     id: "2",
-    make: "Ford",
-    model: "Mustang",
-    year: 2021,
-    color: "Red",
-    mobile: "https://placehold.co/640x360",
-    tablet: "https://placehold.co/1023x576",
-    desktop: "https://placehold.co/1440x810",
-  },
-  {
-    id: "3",
-    make: "Honda",
-    model: "Civic",
+    make: "Toyota",
+    model: "Camry",
     year: 2023,
-    color: "Blue",
+    color: "Silver",
     mobile: "https://placehold.co/640x360",
     tablet: "https://placehold.co/1023x576",
     desktop: "https://placehold.co/1440x810",
@@ -44,26 +33,17 @@ const mockCarsWithTypename = mockCars.map((car) => ({
   __typename: "Car" as const,
 }));
 
-const newCarInput = {
-  make: "Tesla",
-  model: "Model 3",
-  year: 2025,
-  color: "White",
-};
-
-const addedCarResult = {
-  id: "4",
-  ...newCarInput,
+const newCar = {
+  id: "3",
+  make: "Ford",
+  model: "Mustang",
+  year: 2024,
+  color: "Red",
   mobile: "https://placehold.co/640x360",
   tablet: "https://placehold.co/1023x576",
   desktop: "https://placehold.co/1440x810",
   __typename: "Car" as const,
 };
-
-const updatedCarsWithTypename = [
-  ...mockCarsWithTypename,
-  addedCarResult,
-];
 
 const mocks = [
   {
@@ -71,92 +51,96 @@ const mocks = [
     result: { data: { cars: mockCarsWithTypename } },
   },
   {
-    request: { query: ADD_CAR, variables: newCarInput },
-    result: { data: { addCar: addedCarResult } },
+    request: {
+      query: ADD_CAR,
+      variables: {
+        make: "Ford",
+        model: "Mustang",
+        year: 2024,
+        color: "Red",
+      },
+    },
+    result: { data: { addCar: newCar } },
   },
   {
     request: { query: GET_CARS },
-    result: { data: { cars: updatedCarsWithTypename } },
+    result: { data: { cars: [...mockCarsWithTypename, newCar] } },
   },
 ];
 
-describe("CarInventory integration", () => {
-  it("renders car list returned by the API", async () => {
+describe("CarInventory Application", () => {
+  it("renders the car list returned by the API", async () => {
     render(
-      <MockedProvider mocks={mocks} addTypename={true}>
-        <CarListView />
+      <MockedProvider mocks={mocks}>
+        <App />
       </MockedProvider>
     );
 
-    expect(await screen.findByText(/Toyota Camry/i)).toBeInTheDocument();
-    expect(screen.getByText(/Ford Mustang/i)).toBeInTheDocument();
-    expect(screen.getByText(/Honda Civic/i)).toBeInTheDocument();
+    expect(await screen.findByText("2021 Honda Civic")).toBeInTheDocument();
+    expect(screen.getByText("2023 Toyota Camry")).toBeInTheDocument();
   });
 
-  it("narrows the list when searching by model", async () => {
+  it("narrows the car list when typing in search", async () => {
     const user = userEvent.setup();
     render(
-      <MockedProvider mocks={mocks} addTypename={true}>
-        <CarListView />
+      <MockedProvider mocks={mocks}>
+        <App />
       </MockedProvider>
     );
 
-    expect(await screen.findByText(/Toyota Camry/i)).toBeInTheDocument();
+    expect(await screen.findByText("2021 Honda Civic")).toBeInTheDocument();
+    expect(screen.getByText("2023 Toyota Camry")).toBeInTheDocument();
 
-    const searchInput = screen.getByLabelText(/filter by model/i);
-    await user.type(searchInput, "Mustang");
+    const searchInput = screen.getByRole("textbox", { name: /filter by model/i });
+    await user.type(searchInput, "Civic");
 
-    expect(screen.queryByText(/Toyota Camry/i)).not.toBeInTheDocument();
-    expect(screen.getByText(/Ford Mustang/i)).toBeInTheDocument();
+    expect(screen.getByText("2021 Honda Civic")).toBeInTheDocument();
+    expect(screen.queryByText("2023 Toyota Camry")).not.toBeInTheDocument();
   });
 
-  it("reorders the list when changing sort options", async () => {
+  it("reorders the car list when changing sort options", async () => {
     const user = userEvent.setup();
     render(
-      <MockedProvider mocks={mocks} addTypename={true}>
-        <CarListView />
+      <MockedProvider mocks={mocks}>
+        <App />
       </MockedProvider>
     );
 
-    expect(await screen.findByText(/Toyota Camry/i)).toBeInTheDocument();
+    expect(await screen.findByText("2021 Honda Civic")).toBeInTheDocument();
 
-    const sortSelect = screen.getByLabelText(/sort by/i);
-    await user.click(sortSelect);
+    const sortYearButton = screen.getByRole("button", { name: /sort by year/i });
+    await user.click(sortYearButton);
 
-    const newestOption = await screen.findByRole("option", {
-      name: /newest/i,
-    });
-    await user.click(newestOption);
-
-    const items = screen.getAllByRole("heading", { level: 6 });
-    expect(items[0]).toHaveTextContent(/2024 Toyota Camry/);
-    expect(items[1]).toHaveTextContent(/2023 Honda Civic/);
-    expect(items[2]).toHaveTextContent(/2021 Ford Mustang/);
+    const carCards = screen.getAllByText(/\d{4} (Honda|Toyota)/);
+    expect(carCards[0]).toHaveTextContent("2023 Toyota Camry");
+    expect(carCards[1]).toHaveTextContent("2021 Honda Civic");
   });
 
-  it("triggers mutation on form submission and updates inventory", async () => {
+  it("submits the add car form and updates the view with the new car", async () => {
     const user = userEvent.setup();
     render(
-      <MockedProvider mocks={mocks} addTypename={true}>
-        <CarListView />
+      <MockedProvider mocks={mocks}>
+        <App />
       </MockedProvider>
     );
 
-    expect(await screen.findByText(/Toyota Camry/i)).toBeInTheDocument();
+    expect(await screen.findByText("2021 Honda Civic")).toBeInTheDocument();
 
-    await user.type(screen.getAllByRole("textbox", { name: /make/i })[0], newCarInput.make);
-    await user.type(screen.getAllByRole("textbox", { name: /model/i })[0], newCarInput.model);
-    await user.type(
-      screen.getByRole("spinbutton", { name: /year/i }),
-      newCarInput.year.toString()
-    );
-    await user.type(screen.getByRole("textbox", { name: /color/i }), newCarInput.color);
-
+    const makeInput = screen.getByRole("textbox", { name: /^make$/i });
+    const modelInput = screen.getByRole("textbox", { name: /^model$/i });
+    const yearInput = screen.getByRole("spinbutton", { name: /year/i });
+    const colorInput = screen.getByRole("textbox", { name: /color/i });
     const submitButton = screen.getByRole("button", { name: /add car/i });
+
+    await user.type(makeInput, "Ford");
+    await user.type(modelInput, "Mustang");
+    await user.type(yearInput, "2024");
+    await user.type(colorInput, "Red");
+
     await user.click(submitButton);
 
     await waitFor(() => {
-      expect(screen.getByText(/2025 Tesla Model 3/i)).toBeInTheDocument();
+      expect(screen.getByText("2024 Ford Mustang")).toBeInTheDocument();
     });
   });
 });

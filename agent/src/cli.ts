@@ -62,6 +62,7 @@ OPTIONS
   --max-repairs <n>      Repair attempts per task before marking it degraded. Default: 3
   --concurrency <n>      Concurrent LLM calls per topological level. Default: 2
   --no-cache             Bypass the on-disk prompt cache.
+  --no-review            Skip the spec-compliance review stage (saves one call).
   --keep-examples        Keep the boilerplate's Example.tsx reference files.
   -h, --help             Show this help.
 
@@ -83,6 +84,7 @@ export interface CliOptions {
   readonly maxRepairsOverride: number | undefined;
   readonly concurrencyOverride: number | undefined;
   readonly cacheDisabled: boolean;
+  readonly reviewDisabled: boolean;
 }
 
 export class UsageError extends Error {}
@@ -114,6 +116,7 @@ export function parseArgs(argv: readonly string[]): CliOptions | undefined {
   let maxRepairsOverride: number | undefined;
   let concurrencyOverride: number | undefined;
   let cacheDisabled = false;
+  let reviewDisabled = false;
 
   for (let i = 0; i < argv.length; i += 1) {
     const flag = argv[i];
@@ -146,6 +149,9 @@ export function parseArgs(argv: readonly string[]): CliOptions | undefined {
       case "--no-cache":
         cacheDisabled = true;
         break;
+      case "--no-review":
+        reviewDisabled = true;
+        break;
       case "--keep-examples":
         keepExamples = true;
         break;
@@ -167,6 +173,7 @@ export function parseArgs(argv: readonly string[]): CliOptions | undefined {
     maxRepairsOverride,
     concurrencyOverride,
     cacheDisabled,
+    reviewDisabled,
   };
 }
 
@@ -245,6 +252,9 @@ async function main(): Promise<number> {
   const outcome = await executePlan(client, ledger, context, ordered, options.outputDir, {
     maxRepairs: options.maxRepairsOverride ?? config.maxRepairs,
     keepExamples: options.keepExamples,
+    spec,
+    reviewModel: models.planner,
+    skipReview: options.reviewDisabled,
     onProgress: log,
   });
 
@@ -269,6 +279,27 @@ async function main(): Promise<number> {
         `  [${task.status}] ${task.taskId}${task.note === "" ? "" : ` — ${task.note}`}`,
     ),
   ];
+
+  if (outcome.review !== undefined) {
+    const { review } = outcome;
+    const counts = { satisfied: 0, partial: 0, missing: 0 };
+    for (const finding of review.findings) counts[finding.status] += 1;
+
+    report.push(
+      "",
+      `Spec compliance:  ${counts.satisfied} satisfied, ${counts.partial} partial, ${counts.missing} missing`,
+      `  ${review.assessment}`,
+    );
+
+    const notSatisfied = review.findings.filter((finding) => finding.status !== "satisfied");
+    if (notSatisfied.length > 0) {
+      report.push("", "Requirements not fully met:");
+      for (const finding of notSatisfied) {
+        report.push(`  [${finding.status}] ${finding.requirementId}`);
+        report.push(`    ${finding.evidence}`);
+      }
+    }
+  }
 
   if (degraded.length > 0) {
     report.push("", `Unfinished work (${degraded.length} task(s)):`);

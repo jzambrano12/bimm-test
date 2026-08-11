@@ -9,6 +9,12 @@ import {
 } from "./generate.ts";
 import type { OrderedPlan } from "./plan.ts";
 import {
+  formatFindingsForRepair,
+  reviewBuild,
+  type RemediationTarget,
+  type ReviewOutcome,
+} from "./review.ts";
+import {
   diagnoseHarnessFailure,
   diagnosticsForFiles,
   ensureDependencies,
@@ -45,12 +51,19 @@ export interface RunOutcome {
   readonly testsPassed: boolean;
   readonly testOutput: string;
   readonly outstandingDiagnostics: readonly Diagnostic[];
+  /** Absent when review was skipped. */
+  readonly review: ReviewOutcome | undefined;
 }
 
 export interface RunOptions {
   readonly maxRepairs: number;
   /** Keep the boilerplate's Example reference files in the delivered app. */
   readonly keepExamples: boolean;
+  /** The specification verbatim, for the review stage to judge against. */
+  readonly spec: string;
+  /** Model for the review call — few calls, high leverage. */
+  readonly reviewModel: string;
+  readonly skipReview: boolean;
   readonly onProgress: (label: string, detail: string) => void;
 }
 
@@ -233,6 +246,10 @@ export async function executePlan(
     outcomes,
   );
 
+  const review = options.skipReview
+    ? undefined
+    : await runReviewPhase(client, ledger, context, ordered, cwd, options);
+
   if (!options.keepExamples) {
     const removed = await removeExampleFiles(context);
     if (removed.length > 0) {
@@ -249,7 +266,152 @@ export async function executePlan(
     testsPassed: finalTests.ok,
     testOutput: finalTests.output,
     outstandingDiagnostics: finalTypecheck.diagnostics,
+    review,
   };
+}
+
+/**
+ * The third validation tier: a reviewer that reads the specification.
+ *
+ * One round, deliberately. The reviewer's value is catching what the compiler and
+ * the tests structurally cannot — a requirement implemented with the wrong
+ * values. That is a bounded class of problem, and a second round mostly produces
+ * a second opinion rather than new information.
+ */
+async function runReviewPhase(
+  client: OpenAI,
+  ledger: UsageLedger,
+  context: GenerationContext,
+  ordered: OrderedPlan,
+  cwd: string,
+  options: RunOptions,
+): Promise<ReviewOutcome> {
+  const review = await reviewBuild(
+    client,
+    ledger,
+    context,
+    ordered,
+    options.spec,
+    options.reviewModel,
+  );
+
+  const counts = { satisfied: 0, partial: 0, missing: 0 };
+  for (const finding of review.findings) counts[finding.status] += 1;
+  options.onProgress(
+    "review",
+    `${counts.satisfied} satisfied, ${counts.partial} partial, ${counts.missing} missing` +
+      (review.truncated ? " (source listing truncated)" : ""),
+  );
+
+  for (const { finding, reason } of review.unroutable) {
+    options.onProgress("review", `${finding.requirementId}: ${reason}`);
+  }
+
+  if (review.actionable.length === 0) return review;
+
+  const requirementText = (id: string): string =>
+    ordered.plan.requirements.find((requirement) => requirement.id === id)?.text ?? id;
+
+  // Group by task so two findings on one file are fixed in a single call, with
+  // both in the prompt, rather than sequentially overwriting each other.
+  const byTask = new Map<string, RemediationTarget[]>();
+  for (const target of review.actionable) {
+    byTask.set(target.task.id, [...(byTask.get(target.task.id) ?? []), target]);
+  }
+
+  for (const [taskId, targets] of byTask) {
+    const task = targets[0]?.task;
+    if (task === undefined) continue;
+
+    options.onProgress("remediate", `${taskId}: ${targets.length} finding(s)`);
+
+    const previous = await Promise.all(
+      task.targetFiles.map(async (path) => ({
+        path,
+        contents: await context.fs.read(path).catch(() => ""),
+        exports: [] as string[],
+      })),
+    );
+
+    try {
+      await repairTask(
+        client,
+        ledger,
+        context,
+        task,
+        previous,
+        `A reviewer compared this code against the specification and found:\n\n${formatFindingsForRepair(targets, requirementText)}`,
+        1,
+      );
+    } catch (error) {
+      if (!(error instanceof GenerationContractError)) throw error;
+      options.onProgress("remediate", `${taskId}: rejected off-contract remediation`);
+    }
+  }
+
+  // A remediation is still code, and can break what already compiled. Nothing
+  // else would catch that: the per-task loops have finished by now.
+  await stabilise(client, ledger, context, ordered, cwd, options);
+  return review;
+}
+
+/**
+ * Re-establishes a clean typecheck after the review phase edited files.
+ *
+ * Bounded by the same repair budget. Each round repairs every task that owns
+ * errors, so a mistake that propagated across two files converges instead of
+ * ping-ponging between them.
+ */
+async function stabilise(
+  client: OpenAI,
+  ledger: UsageLedger,
+  context: GenerationContext,
+  ordered: OrderedPlan,
+  cwd: string,
+  options: RunOptions,
+): Promise<void> {
+  for (let attempt = 1; attempt <= options.maxRepairs; attempt += 1) {
+    const result = await typecheck(cwd);
+    if (result.ok) {
+      if (attempt > 1) options.onProgress("stabilise", `clean after ${attempt - 1} round(s)`);
+      return;
+    }
+
+    const affected = ordered.plan.tasks.filter(
+      (task) => diagnosticsForFiles(result.diagnostics, task.targetFiles).length > 0,
+    );
+    if (affected.length === 0) return;
+
+    options.onProgress(
+      "stabilise",
+      `${result.diagnostics.length} error(s) after remediation, repairing ${affected.length} task(s)`,
+    );
+
+    for (const task of affected) {
+      const mine = diagnosticsForFiles(result.diagnostics, task.targetFiles);
+      const previous = await Promise.all(
+        task.targetFiles.map(async (path) => ({
+          path,
+          contents: await context.fs.read(path).catch(() => ""),
+          exports: [] as string[],
+        })),
+      );
+
+      try {
+        await repairTask(
+          client,
+          ledger,
+          context,
+          task,
+          previous,
+          formatDiagnostics(mine),
+          attempt,
+        );
+      } catch (error) {
+        if (!(error instanceof GenerationContractError)) throw error;
+      }
+    }
+  }
 }
 
 /**
