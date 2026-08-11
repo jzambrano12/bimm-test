@@ -65,6 +65,19 @@ function findErrors(plan: TaskPlan): string[] {
         issues.push(`task "${task.id}" depends on unknown task "${dependency}"`);
       }
     }
+
+    // A test with no dependencies is scheduled in the first level, before the
+    // code it covers exists, so it is written against an imagined subject. This
+    // happened: a planner put an App integration test at level one with no
+    // dependencies while App was generated at level three, and the test failed
+    // for reasons no repair could reach. The prompt asks for the dependency;
+    // this makes it a requirement.
+    if (task.kind === "test" && task.dependsOn.length === 0) {
+      issues.push(
+        `test task "${task.id}" declares no dependencies — a test must depend on the ` +
+          `task whose output it covers, or it will be generated before that code exists`,
+      );
+    }
   }
 
   for (const [file, claimants] of owners) {

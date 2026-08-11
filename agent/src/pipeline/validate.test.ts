@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  diagnoseHarnessFailure,
   diagnosticsForFiles,
   formatDiagnostics,
   parseFailedTestFiles,
@@ -112,5 +113,34 @@ AssertionError: expected 1 to be 0
 
   it("returns nothing when the suite passes", () => {
     expect(parseFailedTestFiles(" Test Files  4 passed (4)\n Tests  12 passed (12)")).toEqual([]);
+  });
+});
+
+describe("diagnoseHarnessFailure", () => {
+  it.each([
+    ["Error: Cannot find module '/x/src/test-setup.ts'", /module could not be resolved/],
+    ["Failed to load url /x/src/test-setup.ts", /could not load a file/],
+    ["Failed to resolve import \"@/hooks/useCars\"", /import could not be resolved/],
+    [" Test Files  2 failed (2)\n      Tests  no tests", /no tests executed/],
+  ])("recognises %s as a harness fault", (output, expected) => {
+    expect(diagnoseHarnessFailure(output)).toMatch(expected);
+  });
+
+  it("treats an ordinary assertion failure as repairable code", () => {
+    const output = `
+ FAIL  src/__tests__/App.test.tsx > renders
+AssertionError: expected 2 to be 1
+ Test Files  1 failed (1)
+      Tests  1 failed | 5 passed (6)
+`;
+    expect(diagnoseHarnessFailure(output)).toBeUndefined();
+  });
+
+  it("treats a multiple-elements-found error as repairable code", () => {
+    // A real failure from a generated test: getByLabelText(/make/i) matched two
+    // fields. That is the test's problem to fix, not the harness's.
+    expect(
+      diagnoseHarnessFailure("TestingLibraryElementError: Found multiple elements"),
+    ).toBeUndefined();
   });
 });

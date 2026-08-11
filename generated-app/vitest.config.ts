@@ -12,6 +12,12 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
-    setupFiles: ["./src/test-setup.ts"],
+    // Absolute, not "./src/test-setup.ts". A relative setup file is resolved
+    // against Vitest's inferred root, which is not this directory when the
+    // project is nested inside another npm package — the setup file then
+    // resolves to the parent's src/ and every test file fails to load before a
+    // single assertion runs. Anchoring to the config's own directory makes the
+    // project runnable wherever it is placed.
+    setupFiles: [resolve(__dirname, "src/test-setup.ts")],
   },
 });

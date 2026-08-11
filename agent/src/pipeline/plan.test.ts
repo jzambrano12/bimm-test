@@ -103,6 +103,33 @@ describe("validateAndOrder — rejections", () => {
     ).toThrow(/claimed by 2 tasks/);
   });
 
+  it("rejects a test task with no dependencies", () => {
+    // Such a task lands in level one, before its subject exists, and is written
+    // against an imagined API. Observed in a real run: an App integration test
+    // planned at level one while App was generated at level three.
+    expect(() =>
+      validateAndOrder(
+        plan([task({ id: "t", kind: "test", targetFiles: ["src/__tests__/A.test.tsx"] })]),
+      ),
+    ).toThrow(/declares no dependencies/);
+  });
+
+  it("accepts a test task that depends on its subject", () => {
+    expect(() =>
+      validateAndOrder(
+        plan([
+          task({ id: "comp" }),
+          task({
+            id: "t",
+            kind: "test",
+            dependsOn: ["comp"],
+            targetFiles: ["src/__tests__/A.test.tsx"],
+          }),
+        ]),
+      ),
+    ).not.toThrow();
+  });
+
   it("rejects a task targeting provided infrastructure", () => {
     expect(() =>
       validateAndOrder(plan([task({ id: "a", targetFiles: ["src/mocks/handlers.ts"] })])),

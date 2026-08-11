@@ -9,6 +9,7 @@ import {
 } from "./generate.ts";
 import type { OrderedPlan } from "./plan.ts";
 import {
+  diagnoseHarnessFailure,
   diagnosticsForFiles,
   ensureDependencies,
   formatDiagnostics,
@@ -48,7 +49,36 @@ export interface RunOutcome {
 
 export interface RunOptions {
   readonly maxRepairs: number;
+  /** Keep the boilerplate's Example reference files in the delivered app. */
+  readonly keepExamples: boolean;
   readonly onProgress: (label: string, detail: string) => void;
+}
+
+/**
+ * The boilerplate's reference component and test, which document the expected
+ * idiom and are explicitly marked as deletable. They serve the agent as its
+ * few-shot example and then have no place in the delivered app.
+ */
+const EXAMPLE_FILES: readonly string[] = [
+  "src/components/Example.tsx",
+  "src/__tests__/Example.test.tsx",
+];
+
+/**
+ * Deterministic cleanup. Removing two known files is not a decision that needs a
+ * language model, and running it before the final verification means the
+ * reported typecheck and test results describe the app as delivered rather than
+ * the app plus scaffolding.
+ */
+async function removeExampleFiles(context: GenerationContext): Promise<string[]> {
+  const removed: string[] = [];
+  for (const path of EXAMPLE_FILES) {
+    if (await context.fs.exists(path)) {
+      await context.fs.remove(path);
+      removed.push(path);
+    }
+  }
+  return removed;
 }
 
 function summarise(diagnostics: readonly Diagnostic[]): string[] {
@@ -203,6 +233,13 @@ export async function executePlan(
     outcomes,
   );
 
+  if (!options.keepExamples) {
+    const removed = await removeExampleFiles(context);
+    if (removed.length > 0) {
+      options.onProgress("cleanup", `removed ${removed.length} reference file(s)`);
+    }
+  }
+
   const finalTypecheck = await typecheck(cwd);
   const finalTests = await runTests(cwd);
 
@@ -244,6 +281,25 @@ async function repairFailingTests(
     if (tests.ok) {
       options.onProgress("tests", attempt === 1 ? "passed" : `passed after ${attempt - 1} repair round(s)`);
       return merged;
+    }
+
+    // Stop before spending anything if the runner, not the code, is broken.
+    // Repairing a test file cannot fix an unresolvable import, and the model
+    // cannot tell the difference from the failure text alone.
+    const harnessProblem = diagnoseHarnessFailure(tests.output);
+    if (harnessProblem !== undefined) {
+      options.onProgress(
+        "tests",
+        `not repairable: ${harnessProblem}. This is a project or configuration ` +
+          `fault, not generated code — skipping test repair.`,
+      );
+      return merged.map((entry) => ({
+        ...entry,
+        note:
+          entry.note === ""
+            ? `test suite could not run: ${harnessProblem}`
+            : `${entry.note}; test suite could not run: ${harnessProblem}`,
+      }));
     }
 
     const repairable = tests.failedFiles

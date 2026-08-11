@@ -91,6 +91,37 @@ export function parseFailedTestFiles(output: string): string[] {
   return [...failed].sort();
 }
 
+/**
+ * Signs that the test runner itself failed rather than the code under test.
+ *
+ * The distinction is worth money. A run once spent three repair rounds and
+ * ~10k tokens rewriting a test file when the real fault was a setup file
+ * resolving to the wrong directory, so no module loaded and no assertion ever
+ * executed. No amount of editing the test could have fixed that, and the model
+ * had no way to know: it was handed a failure and asked to repair it.
+ *
+ * Detecting it lets the agent say "this is not your code" and stop, instead of
+ * burning its budget proving that it cannot fix someone else's problem.
+ */
+const HARNESS_FAILURE_SIGNS: readonly { pattern: RegExp; reason: string }[] = [
+  { pattern: /Cannot find module/i, reason: "a module could not be resolved" },
+  { pattern: /Failed to load url/i, reason: "the test runner could not load a file" },
+  { pattern: /Failed to resolve import/i, reason: "an import could not be resolved" },
+  { pattern: /Tests\s+no tests/i, reason: "no tests executed at all" },
+  { pattern: /No test files found/i, reason: "no test files were discovered" },
+];
+
+/**
+ * Returns why the failure looks like a harness problem, or undefined if it
+ * looks like an ordinary failing assertion.
+ */
+export function diagnoseHarnessFailure(output: string): string | undefined {
+  for (const { pattern, reason } of HARNESS_FAILURE_SIGNS) {
+    if (pattern.test(output)) return reason;
+  }
+  return undefined;
+}
+
 export interface CommandOutcome {
   readonly ok: boolean;
   readonly output: string;

@@ -244,6 +244,7 @@ async function main(): Promise<number> {
   process.stderr.write("\n");
   const outcome = await executePlan(client, ledger, context, ordered, options.outputDir, {
     maxRepairs: options.maxRepairsOverride ?? config.maxRepairs,
+    keepExamples: options.keepExamples,
     onProgress: log,
   });
 

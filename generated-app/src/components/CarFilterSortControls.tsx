@@ -1,79 +1,48 @@
-import {
-  Box,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
-} from "@mui/material";
-import type { SortOption } from "@/hooks/useCarFilterSort";
+import { Box, TextField, FormControl, InputLabel, Select, MenuItem } from "@mui/material";
+import type { SelectChangeEvent } from "@mui/material";
 
 export interface CarFilterSortControlsProps {
-  searchQuery: string;
-  onSearchChange: (query: string) => void;
-  sortBy: SortOption;
-  onSortChange: (sort: SortOption) => void;
-  selectedYear?: string;
-  onYearChange?: (year: string) => void;
-  availableYears?: number[];
+  searchModel: string;
+  onSearchModelChange: (value: string) => void;
+  sortBy: 'make' | 'year';
+  onSortByChange: (value: 'make' | 'year') => void;
 }
 
 export function CarFilterSortControls({
-  searchQuery,
-  onSearchChange,
+  searchModel,
+  onSearchModelChange,
   sortBy,
-  onSortChange,
-  selectedYear = "",
-  onYearChange,
-  availableYears,
-}: CarFilterSortControlsProps): JSX.Element {
+  onSortByChange,
+}: CarFilterSortControlsProps) {
+  const handleSortChange = (event: SelectChangeEvent<'make' | 'year'>) => {
+    const value = event.target.value;
+    if (value === 'make' || value === 'year') {
+      onSortByChange(value);
+    }
+  };
+
   return (
-    <Box sx={{ mb: 3 }}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <TextField
-          label="Search Model"
-          placeholder="Search by model..."
-          value={searchQuery}
-          onChange={(e) => onSearchChange(e.target.value)}
-          fullWidth
-          size="small"
-        />
-
-        {availableYears !== undefined && (
-          <FormControl size="small" sx={{ minWidth: 140 }}>
-            <InputLabel id="year-filter-label">Filter by Year</InputLabel>
-            <Select
-              labelId="year-filter-label"
-              id="year-filter-select"
-              value={selectedYear}
-              label="Filter by Year"
-              onChange={(e) => onYearChange?.(e.target.value)}
-            >
-              <MenuItem value="">All Years</MenuItem>
-              {availableYears.map((year) => (
-                <MenuItem key={year} value={year.toString()}>
-                  {year}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        )}
-
-        <FormControl size="small" sx={{ minWidth: 180 }}>
-          <InputLabel id="sort-by-label">Sort By</InputLabel>
-          <Select
-            labelId="sort-by-label"
-            id="sort-by-select"
-            value={sortBy}
-            label="Sort By"
-            onChange={(e) => onSortChange(e.target.value as SortOption)}
-          >
-            <MenuItem value="make-asc">Make (A-Z)</MenuItem>
-            <MenuItem value="year-desc">Year (Newest First)</MenuItem>
-          </Select>
-        </FormControl>
-      </Stack>
+    <Box sx={{ display: "flex", gap: 2, mb: 3, flexWrap: "wrap", alignItems: "center" }}>
+      <TextField
+        label="Search by Model"
+        variant="outlined"
+        size="small"
+        value={searchModel}
+        onChange={(e) => onSearchModelChange(e.target.value)}
+        sx={{ flexGrow: 1, minWidth: "200px" }}
+      />
+      <FormControl size="small" sx={{ minWidth: "160px" }}>
+        <InputLabel id="sort-by-label">Sort By</InputLabel>
+        <Select
+          labelId="sort-by-label"
+          value={sortBy}
+          label="Sort By"
+          onChange={handleSortChange}
+        >
+          <MenuItem value="make">Make (A-Z)</MenuItem>
+          <MenuItem value="year">Year (Newest)</MenuItem>
+        </Select>
+      </FormControl>
     </Box>
   );
 }
