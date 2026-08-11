@@ -316,6 +316,7 @@ async function main(): Promise<number> {
     contract,
     styleReference: renderStyleReference(digest),
     requirements: ordered.plan.requirements,
+    prohibitions: ordered.plan.prohibitions,
     tasksById: new Map(ordered.plan.tasks.map((task) => [task.id, task])),
     registry,
     fs: new ProjectFs(options.outputDir),
@@ -377,9 +378,20 @@ async function main(): Promise<number> {
 
     report.push(
       "",
-      `Spec compliance:  ${counts.satisfied} satisfied, ${counts.partial} partial, ${counts.missing} missing`,
+      `Spec compliance:  ${counts.satisfied} satisfied, ${counts.partial} partial, ${counts.missing} missing` +
+        (ordered.plan.prohibitions.length === 0
+          ? ""
+          : `, ${review.breaches.length} of ${ordered.plan.prohibitions.length} prohibition(s) breached`),
       `  ${review.assessment}`,
     );
+
+    if (review.breaches.length > 0) {
+      report.push("", `Prohibitions breached (${review.breaches.length}):`);
+      for (const breach of review.breaches) {
+        report.push(`  [breached] ${breach.prohibitionId}`);
+        report.push(`    ${breach.evidence}`);
+      }
+    }
 
     if (review.downgraded.length > 0) {
       report.push(

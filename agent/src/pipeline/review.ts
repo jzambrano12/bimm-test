@@ -6,6 +6,7 @@ import {
   ReviewVerdict,
   type PlannedTask,
   type ReviewFinding,
+  type ReviewViolation,
   type SpecRequirement,
 } from "../schemas.ts";
 import { citesAnyValue, extractStatedValues } from "../context/specValues.ts";
@@ -39,6 +40,8 @@ export interface ReviewOutcome {
   readonly truncated: boolean;
   /** Requirement ids whose "satisfied" verdict its own evidence did not support. */
   readonly downgraded: readonly string[];
+  /** Prohibitions the built app breached. */
+  readonly breaches: readonly ReviewViolation[];
 }
 
 /**
@@ -79,7 +82,12 @@ export async function reviewBuild(
     model,
     phase: "review",
     system: REVIEWER_SYSTEM,
-    user: buildReviewerUser({ requirements: ordered.plan.requirements, spec, files }),
+    user: buildReviewerUser({
+      requirements: ordered.plan.requirements,
+      prohibitions: ordered.plan.prohibitions,
+      spec,
+      files,
+    }),
     schema: ReviewVerdict,
     schemaName: "ReviewVerdict",
     cache: context.cache,
@@ -95,13 +103,64 @@ export async function reviewBuild(
 
   const audited = auditFindings(verdict.findings, ordered.plan.requirements, sourceFor);
 
+  const breaches = verdict.violations.filter((violation) => violation.breached);
+  const routed = routeFindings(audited.findings, ordered);
+
   return {
     findings: audited.findings,
     assessment: verdict.assessment,
     truncated,
     downgraded: audited.downgraded,
-    ...routeFindings(audited.findings, ordered),
+    breaches,
+    actionable: [...routed.actionable, ...routeBreaches(breaches, ordered)],
+    unroutable: routed.unroutable,
   };
+}
+
+/**
+ * Turns a breached prohibition into remediation targets.
+ *
+ * A breach is converted into a finding so it travels the same path as everything
+ * else — same routing rules, same protected-path refusal, same repair prompt. The
+ * synthesised requirement text is imperative ("Remove …") because that is what
+ * the generator has to do; a prohibition phrased as a prohibition reads to a
+ * model as context rather than as work.
+ */
+function routeBreaches(
+  breaches: readonly ReviewViolation[],
+  ordered: OrderedPlan,
+): RemediationTarget[] {
+  const ownerOf = new Map<string, PlannedTask>();
+  for (const task of ordered.plan.tasks) {
+    for (const file of task.targetFiles) ownerOf.set(file, task);
+  }
+
+  const targets: RemediationTarget[] = [];
+  for (const breach of breaches) {
+    const prohibition = ordered.plan.prohibitions.find(
+      (entry) => entry.id === breach.prohibitionId,
+    );
+
+    for (const file of breach.remediationFiles) {
+      if (!checkWritable(file).allowed) continue;
+
+      const task = ownerOf.get(file);
+      if (task === undefined) continue;
+      if (targets.some((target) => target.task.id === task.id)) continue;
+
+      targets.push({
+        task,
+        finding: {
+          requirementId: breach.prohibitionId,
+          status: "partial",
+          evidence: breach.evidence,
+          remediationTitle: `Remove what the specification forbids: ${prohibition?.text ?? breach.prohibitionId}`,
+          remediationFiles: [file],
+        },
+      });
+    }
+  }
+  return targets;
 }
 
 /**

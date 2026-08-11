@@ -19,6 +19,7 @@ function task(id: string, targetFiles: string[], kind: PlannedTask["kind"] = "co
 
 const plan: TaskPlan = {
   summary: "test",
+  prohibitions: [{ id: "no-images", text: "Do not render images of any kind." }],
   requirements: [
     { id: "responsive", text: "Use 640px and 1024px thresholds.", required: true },
     { id: "bonus-filter", text: "Filter by year.", required: false },

@@ -42,6 +42,16 @@ because nothing downstream fails when they are missing. This list is
 the contract the finished app is judged against, so it must mirror the spec and
 nothing else.
 
+STEP 1b — Extract prohibitions.
+A specification often says what not to build: an "out of scope" section, a "do
+not" list, a sentence ruling something out. List each as a prohibition. This
+matters as much as the requirement list and is easier to skip, because nothing
+fails when a prohibition is ignored — the code simply does the forbidden thing
+and every check passes. If the spec forbids nothing, return an empty array.
+
+Do not restate a requirement as its own inverse, and do not invent prohibitions
+from your own taste. Only what the spec rules out.
+
 STEP 2 — Decompose into tasks.
 Rules, all of which are enforced mechanically after you answer:
 - Exactly one task owns each file. Two tasks must never list the same path in
@@ -63,6 +73,8 @@ Rules, all of which are enforced mechanically after you answer:
 - Only target files under src/. Never target a path the project contract lists
   as protected — that infrastructure is provided and rewriting it fails the run.
 - Do not create tasks for anything the project contract says already exists.
+- No task may implement anything on the prohibition list. A prohibition is not a
+  low priority; it is a boundary.
 - \`exports\` names the symbols the file will export, so dependent tasks can
   import them without guessing. Be exact.
 - \`exportedInterface\` is the signature those symbols will have, written as
@@ -90,11 +102,15 @@ nouns into your answer.
 
 Specification excerpt:
   "Show a list of books from the GetBooks query. Let the user filter by title.
-   Optionally, show each book's page count."
+   Optionally, show each book's page count. This is a read-only catalogue: do not
+   provide any way to add, edit or delete a book."
 
 A well-formed plan for that excerpt:
 {
   "summary": "Build a filterable book list over the existing GetBooks query. Data access is isolated in a hook, presentation split into a row and a list, and the shell composes them.",
+  "prohibitions": [
+    { "id": "no-editing", "text": "Do not provide any way to add, edit or delete a book." }
+  ],
   "requirements": [
     { "id": "list-books", "text": "Display books returned by the GetBooks query.", "required": true },
     { "id": "filter-by-title", "text": "Filter the displayed books by title.", "required": true },

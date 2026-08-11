@@ -163,6 +163,8 @@ export async function writeRunArtifacts(directory: string, report: RunReport): P
             : {
                 assessment: report.outcome.review.assessment,
                 downgraded: report.outcome.review.downgraded,
+                prohibitions: report.ordered.plan.prohibitions,
+                breaches: report.outcome.review.breaches,
                 findings: report.outcome.review.findings,
                 unroutable: report.outcome.review.unroutable.map((entry) => ({
                   requirementId: entry.finding.requirementId,

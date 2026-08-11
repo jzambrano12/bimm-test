@@ -129,6 +129,8 @@ export interface GeneratorContext {
   readonly dependencyContext: string;
   /** The originating requirements, so the task keeps its purpose in view. */
   readonly requirementContext: string;
+  /** What the spec forbids — injected into every task, not just related ones. */
+  readonly prohibitionContext: string;
 }
 
 export function buildGeneratorUser(task: PlannedTask, context: GeneratorContext): string {
@@ -140,6 +142,8 @@ export function buildGeneratorUser(task: PlannedTask, context: GeneratorContext)
     context.dependencyContext,
     "",
     context.requirementContext,
+    "",
+    context.prohibitionContext,
     "",
     "---",
     "",
@@ -170,6 +174,8 @@ export function buildRepairUser(
     context.contract,
     "",
     context.dependencyContext,
+    "",
+    context.prohibitionContext,
     "",
     "---",
     "",

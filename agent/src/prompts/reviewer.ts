@@ -1,4 +1,4 @@
-import type { SpecRequirement } from "../schemas.ts";
+import type { SpecProhibition, SpecRequirement } from "../schemas.ts";
 
 /**
  * The reviewer prompt.
@@ -46,6 +46,17 @@ values differ, and only you can notice.
 Requirements marked optional in the specification are reported honestly like any
 other, but their absence is a legitimate choice rather than a defect.
 
+PROHIBITIONS
+You are also given what the specification forbids. Return one entry per
+prohibition, with \`breached\` true when the code does the forbidden thing.
+
+Judge these as literally as the requirements. A prohibition on images is breached
+by any image element, however incidental it looks and however well the rest of the
+screen reads — a detail panel that renders one alongside correct text is still
+breaching it. Cite the file and symbol. Do not excuse a breach because the feature
+is useful or because the stack made it easy; the specification already weighed
+that.
+
 REMEDIATION
 For anything not \`satisfied\`, give \`remediationTitle\` as an imperative
 one-liner and \`remediationFiles\` as the existing files a fix would change.
@@ -67,6 +78,7 @@ strong version is what makes this stage worth running.
 
 export interface ReviewInput {
   readonly requirements: readonly SpecRequirement[];
+  readonly prohibitions: readonly SpecProhibition[];
   readonly spec: string;
   readonly files: readonly { readonly path: string; readonly contents: string }[];
 }
@@ -80,6 +92,16 @@ export function buildReviewerUser(input: ReviewInput): string {
         `- **${requirement.id}**${requirement.required ? "" : " (optional)"}: ${requirement.text}`,
     ),
     "",
+    ...(input.prohibitions.length === 0
+      ? []
+      : [
+          "## Prohibitions to judge",
+          "",
+          ...input.prohibitions.map(
+            (prohibition) => `- **${prohibition.id}**: ${prohibition.text}`,
+          ),
+          "",
+        ]),
     "## The specification these were extracted from",
     "",
     "Consult it for detail the summaries above lose — exact values live here.",
@@ -93,6 +115,7 @@ export function buildReviewerUser(input: ReviewInput): string {
     ...input.files.flatMap((file) => [`### ${file.path}`, "```tsx", file.contents.trim(), "```", ""]),
     "---",
     "",
-    "Return one finding per requirement id above. Nothing more, nothing fewer.",
+    "Return one finding per requirement id and one violation per prohibition id",
+    "listed above. Nothing more, nothing fewer.",
   ].join("\n");
 }

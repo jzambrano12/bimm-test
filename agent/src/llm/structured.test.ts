@@ -47,6 +47,7 @@ describe("schemas are convertible to strict JSON Schema", () => {
 describe("TaskPlan validation", () => {
   const validPlan = {
     summary: "Build a car inventory UI.",
+    prohibitions: [],
     requirements: [{ id: "list-cars", text: "Show all cars.", required: true }],
     tasks: [
       {

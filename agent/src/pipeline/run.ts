@@ -371,6 +371,10 @@ async function runReviewPhase(
       (review.truncated ? " (source listing truncated)" : ""),
   );
 
+  for (const breach of review.breaches) {
+    options.onProgress("review", `BREACH ${breach.prohibitionId}: ${breach.evidence}`);
+  }
+
   if (review.downgraded.length > 0) {
     options.onProgress(
       "review",

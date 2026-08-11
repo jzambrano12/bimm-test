@@ -68,9 +68,30 @@ export const PlannedTask = z.object({
 });
 export type PlannedTask = z.infer<typeof PlannedTask>;
 
+/**
+ * Something the specification forbids.
+ *
+ * Modelled as first-class, because a run proved that anything unrepresented is
+ * unenforced. A spec whose "out of scope" section forbade images produced an app
+ * rendering one, and the reviewer scored it 11 of 11 satisfied — correctly, since
+ * it can only judge the requirements it is given, and a prohibition was not one
+ * of them. Absence has to be checkable to be honoured.
+ */
+export const SpecProhibition = z.object({
+  id: z.string().describe("Stable slug, e.g. 'no-images'"),
+  text: z.string().describe("What must not be built, in one sentence"),
+});
+export type SpecProhibition = z.infer<typeof SpecProhibition>;
+
 export const TaskPlan = z.object({
   summary: z.string().describe("Two sentences: what is being built and the overall approach"),
   requirements: z.array(SpecRequirement).min(1),
+  prohibitions: z
+    .array(SpecProhibition)
+    .describe(
+      "Everything the spec says not to build. Empty array if it forbids nothing. " +
+        "No task may implement any of these.",
+    ),
   tasks: z.array(PlannedTask).min(1),
 });
 export type TaskPlan = z.infer<typeof TaskPlan>;
@@ -107,8 +128,22 @@ export const ReviewFinding = z.object({
 });
 export type ReviewFinding = z.infer<typeof ReviewFinding>;
 
+/** A prohibition the built app broke. */
+export const ReviewViolation = z.object({
+  prohibitionId: z.string(),
+  breached: z.boolean().describe("true when the code does the forbidden thing"),
+  evidence: z
+    .string()
+    .describe("Cite the file and symbol that breaches it, or state that nothing does"),
+  remediationFiles: z.array(z.string()).describe("Files a fix would touch; [] if not breached"),
+});
+export type ReviewViolation = z.infer<typeof ReviewViolation>;
+
 export const ReviewVerdict = z.object({
   findings: z.array(ReviewFinding),
+  violations: z
+    .array(ReviewViolation)
+    .describe("One entry per prohibition you were given. Empty only if you were given none."),
   assessment: z.string().describe("Two sentences on the overall state of the generated app"),
 });
 export type ReviewVerdict = z.infer<typeof ReviewVerdict>;

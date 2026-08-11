@@ -9,7 +9,13 @@ import {
   buildRepairUser,
   type GeneratorContext,
 } from "../prompts/generator.ts";
-import { GenerationResult, type GeneratedFile, type PlannedTask, type SpecRequirement } from "../schemas.ts";
+import {
+  GenerationResult,
+  type GeneratedFile,
+  type PlannedTask,
+  type SpecProhibition,
+  type SpecRequirement,
+} from "../schemas.ts";
 import { ProjectFs } from "../tools/fs.ts";
 
 export class GenerationContractError extends Error {}
@@ -75,6 +81,7 @@ export function verifyAgainstTask(
 export interface GenerationContext {
   readonly model: string;
   readonly contract: string;
+  readonly prohibitions: readonly SpecProhibition[];
   readonly styleReference: string;
   readonly requirements: readonly SpecRequirement[];
   /** Every task in the plan, so dependencies resolve to their planned interface. */
@@ -109,6 +116,27 @@ export function renderRequirementContext(
   ].join("\n");
 }
 
+/**
+ * Renders the spec's prohibitions for every task, related or not.
+ *
+ * Not scoped to the task the way requirements are, deliberately. A prohibition is
+ * broken by whichever file happens to reach for the forbidden thing, and which
+ * file that will be is not knowable in advance — an image appeared in a detail
+ * panel whose task said nothing about images.
+ */
+export function renderProhibitionContext(prohibitions: readonly SpecProhibition[]): string {
+  if (prohibitions.length === 0) return "";
+
+  return [
+    "## Out of scope — the specification forbids these",
+    "",
+    "Their absence is correct and required. Do not add them because they seem",
+    "useful, conventional, or because this stack makes them easy.",
+    "",
+    ...prohibitions.map((prohibition) => `- ${prohibition.text}`),
+  ].join("\n");
+}
+
 export function buildGeneratorContext(task: PlannedTask, context: GenerationContext): GeneratorContext {
   const dependencies = task.dependsOn
     .map((id) => context.tasksById.get(id))
@@ -119,6 +147,7 @@ export function buildGeneratorContext(task: PlannedTask, context: GenerationCont
     styleReference: context.styleReference,
     dependencyContext: context.registry.renderDependencyContext(dependencies),
     requirementContext: renderRequirementContext(task, context.requirements),
+    prohibitionContext: renderProhibitionContext(context.prohibitions),
   };
 }
 

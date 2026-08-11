@@ -16,8 +16,12 @@ function task(overrides: Partial<PlannedTask> & { id: string }): PlannedTask {
   };
 }
 
-function plan(tasks: PlannedTask[], requirements = [{ id: "req-a", text: "A", required: true }]): TaskPlan {
-  return { summary: "test plan", requirements, tasks };
+function plan(
+  tasks: PlannedTask[],
+  requirements = [{ id: "req-a", text: "A", required: true }],
+  prohibitions: TaskPlan["prohibitions"] = [],
+): TaskPlan {
+  return { summary: "test plan", requirements, prohibitions, tasks };
 }
 
 describe("validateAndOrder — dependency levels", () => {

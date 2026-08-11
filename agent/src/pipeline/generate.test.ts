@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { ArtifactRegistry } from "../context/artifacts.ts";
-import { renderRequirementContext, stripCodeFence, verifyAgainstTask } from "./generate.ts";
+import {
+  renderProhibitionContext,
+  renderRequirementContext,
+  stripCodeFence,
+  verifyAgainstTask,
+} from "./generate.ts";
 import type { PlannedTask, SpecRequirement } from "../schemas.ts";
 
 const task: PlannedTask = {
@@ -176,5 +181,35 @@ describe("ArtifactRegistry", () => {
     registry.record("a", [{ path: "src/b.ts", contents: "b", exports: [] }]);
     registry.record("b", [{ path: "src/a.ts", contents: "a", exports: [] }]);
     expect(registry.paths()).toEqual(["src/a.ts", "src/b.ts"]);
+  });
+});
+
+describe("renderProhibitionContext", () => {
+  /**
+   * Not scoped to the task the way requirements are, and for a reason found by
+   * running it: a spec forbidding images produced an image inside a detail panel
+   * whose own task said nothing about images. Whichever file reaches for the
+   * forbidden thing is not knowable in advance, so every task is told.
+   */
+  it("lists what the spec forbids", () => {
+    const rendered = renderProhibitionContext([
+      { id: "no-images", text: "Do not render images of any kind." },
+      { id: "no-editing", text: "Do not provide a way to add or edit records." },
+    ]);
+
+    expect(rendered).toContain("Do not render images of any kind.");
+    expect(rendered).toContain("Do not provide a way to add or edit records.");
+    expect(rendered).toMatch(/absence is correct/i);
+  });
+
+  it("anticipates the excuse a model reaches for", () => {
+    // The breach that happened was a conventional, useful-looking addition.
+    expect(renderProhibitionContext([{ id: "x", text: "No images." }])).toMatch(
+      /because they seem\s+useful, conventional/,
+    );
+  });
+
+  it("renders nothing when the spec forbids nothing", () => {
+    expect(renderProhibitionContext([])).toBe("");
   });
 });
