@@ -3,3 +3,17 @@ dist
 .vite
 *.local
 .DS_Store
+
+# Secrets. agent/.gitignore already covers agent/.env; these lines make the
+# root safe too, so a stray .env anywhere cannot be committed or packaged.
+.env
+.env.*
+!.env.example
+
+# On-disk LLM response cache. Regenerable, and large.
+.cache/
+
+# `npm run build` runs `tsc -b`, which writes this. Never commit it: a stale
+# tsbuildinfo makes a later `tsc -b` a silent no-op, so a reviewer's build
+# would report success without having checked anything.
+*.tsbuildinfo
