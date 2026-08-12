@@ -7,11 +7,30 @@
 > ```bash
 > cd agent && cp .env.example .env   # add a GEMINI_API_KEY
 > npm install
-> npm run agent -- --spec ./specs/car-inventory.spec.md --output ../generated-app
+> npm run agent -- --spec ./specs/car-inventory.spec.md
 > ```
 >
-> `generated-app/` is a committed sample output. The brief as received follows
-> below, unchanged.
+> ### Committed sample outputs
+>
+> Two, from two different specs, each with its run report and cost breakdown in
+> `.agent-run/`:
+>
+> | Directory | From | Reviewer verdict |
+> | --- | --- | --- |
+> | [`generated-app/`](./generated-app) | `agent/specs/car-inventory.spec.md` | 7/7 mandatory satisfied |
+> | [`inspector-app/`](./inspector-app) | `agent/specs/detail-inspector.spec.md` | 11/11 satisfied, 0/3 prohibitions breached |
+>
+> Both are checked in and runnable without an API key. In either directory:
+>
+> ```bash
+> npm install && npm run typecheck && npm run test && npm run build
+> ```
+>
+> The second output exists because the brief says the spec may be modified to
+> test generalisation — `detail-inspector.spec.md` forbids the add form, search
+> and sorting that the first spec requires, and the agent omits all three.
+>
+> The brief as received follows below, unchanged.
 
 ---
 

@@ -32,8 +32,13 @@ Then the generated app, which is what the agent is judged by:
 
 ```bash
 cd ../generated-app
-npm install && npm run typecheck && npm run test && npm run dev   # localhost:5173
+npm install && npm run typecheck && npm run test && npm run build
+npm run dev                                                       # localhost:5173
 ```
+
+A committed sample output is already there, so those four commands work on a
+fresh checkout before you run the agent at all. The same holds for
+`inspector-app/`, generated from a second spec — see *Generalisation*.
 
 `--dry-run` prints the plan and exits without writing anything or scaffolding —
 the cheapest way to see what the agent decided to build.
@@ -234,24 +239,32 @@ than a best case — see *what I would improve*.
 Measured, not estimated — the ledger records tokens per phase and the report
 prices them against published rates.
 
-A cold run of the sample spec, from `.agent-run/report.json`:
+Both figures below are cold runs with the cache disabled, read straight from the
+committed `.agent-run/report.json` of each sample output. Every number here is
+reproducible from a file in this repository.
 
-| Phase | Calls | Tokens |
+| Phase | `generated-app` | `inspector-app` |
 | --- | --- | --- |
-| plan | 1 | ~5,600 |
-| generate | 7–9 | ~33,000 |
-| repair | 3–5 | ~40,000 |
-| review | 1 | ~7,000 |
-| **total** | **14–15** | **85,000–95,000** |
+| plan | 1 call, 5,605 tok | 1 call, 6,283 tok |
+| generate | 7 calls, 30,820 tok | 9 calls, 39,966 tok |
+| repair | 5 calls, 42,159 tok | 4 calls, 27,138 tok |
+| review | 1 call, 6,760 tok | 1 call, 7,917 tok |
+| **total** | **14 calls, 85,344 tok** | **15 calls, 81,304 tok** |
+| **cost** | **$0.0558** | **$0.0530** |
+| **wall clock** | 90 s | 73 s |
 
-**$0.056–$0.060** at flash-lite rates ($0.30/M input, $2.50/M output), and
-**$0.00** on the free tier. Around 75 seconds wall clock. A cached re-run of the
-same spec costs **$0.027** and 47 seconds, serving 10 of 14 calls from disk.
+At flash-lite rates ($0.30/M input, $2.50/M output) — and **$0.00** on the free
+tier, which is where both of these actually ran. A cached re-run of the same spec
+costs roughly half and serves most calls from disk; that was measured separately
+and is not in the committed reports, since both were run with `--no-cache` to
+keep them honest cold numbers.
 
-A range rather than a single figure because repair volume varies with what the
-generator gets wrong, and that is the number worth reading: **repair costs about
-as much as first-pass generation.** Repair prompts carry the failing file plus
-its diagnostics, so they are individually larger, and the ratio is what says
+Two runs rather than one because repair volume varies with what the generator
+gets wrong, and the repair row is the number worth reading: **repair costs about
+as much as first-pass generation.** On `car-inventory` it cost more — 42k against
+31k, five calls to fix seven files. On `detail-inspector` it cost less — 27k
+against 40k, four calls against nine files. Repair prompts carry the failing file
+plus its diagnostics, so they are individually larger, and the ratio is what says
 whether the generation prompts are working. Every prompt fix in this repo's
 history moved it down — it began above 50k against 29k.
 
@@ -300,6 +313,18 @@ not:
 
 Both produce plans with no vocabulary or structure carried over from the sample.
 
+`detail-inspector.spec.md` is carried all the way through to a committed output —
+`inspector-app/`, alongside `generated-app/` — so the generalisation claim can be
+inspected rather than taken on trust:
+
+```bash
+npm run agent -- --spec ./agent/specs/detail-inspector.spec.md --output ./inspector-app
+```
+
+The reviewer scores it 11 of 11 requirements satisfied with 0 of 3 prohibitions
+breached. That second number is the one that matters: the sample spec asks for an
+add form, search and sorting, this one forbids all three, and none appears.
+
 ---
 
 ## What worked
@@ -343,6 +368,16 @@ than correct. Writing task outcomes to `.agent-run/state.json` and skipping
 settled tasks would make a quota-exhausted run genuinely resumable, which on a
 free tier is the difference between continuing and waiting a day.
 
+**Add the production build as a third validation tier.** The loop validates with
+`tsc --noEmit` and `vitest run`, which is most of the value for the least time,
+but it never runs `npm run build`. `vite build` can fail where both of those pass
+— unresolved aliases, a rollup import error, an asset the bundler cannot find —
+and a generated app that typechecks but does not build is not a runnable
+deliverable. Both committed samples do build, verified by hand, but by hand is
+the wrong place for it: `validate.ts` already has the shape a build tier needs,
+and the repair loop would then see bundler diagnostics the way it sees compiler
+ones.
+
 **Let a test failure repair the component, not only the test.** When a test fails
 because the component is wrong, the test task cannot fix it — it does not own
 that file. The agent correctly degrades and names the likely culprit rather than
@@ -367,13 +402,33 @@ agreeable.
 
 ## State of the committed sample output
 
-`generated-app/` was produced by the command at the top of this file. It
-typechecks cleanly, all four of its generated tests pass, and the reviewer scores
-it 7 of 7 mandatory requirements satisfied with the three optional ones honestly
-reported as skipped. Its run artefacts are committed alongside it in
-`.agent-run/`.
+Two outputs are committed, from two different specs. Both were produced by the
+commands at the top of this file, and each carries its own run artefacts in
+`.agent-run/` — `plan.md` and the `report.json` the cost table above is drawn
+from.
 
-Verified independently of the agent's own report: the list renders five cars from
+| | `generated-app/` | `inspector-app/` |
+| --- | --- | --- |
+| Spec | `specs/car-inventory.spec.md` | `specs/detail-inspector.spec.md` |
+| Files written | 7 | 9 |
+| Tasks degraded | 0 of 7 | 0 of 9 |
+| Reviewer verdict | 7 of 7 mandatory satisfied, 3 optional reported missing | 11 of 11 satisfied |
+| Prohibitions breached | — | 0 of 3 |
+| Model calls / cost | 14 / $0.056 | 15 / $0.053 |
+
+Both are verified beyond the agent's own report — `npm install && npm run
+typecheck && npm run test && npm run build` passes in each:
+
+```
+generated-app   tsc --noEmit clean   4 tests passed   vite build ok (629 kB)
+inspector-app   tsc --noEmit clean   5 tests passed   vite build ok (551 kB)
+```
+
+`npm run build` is worth stating separately because the agent does not run it —
+it validates with typecheck and tests, so the production bundle is checked here
+by hand rather than by the loop. See *what I would improve*.
+
+Behaviour verified by hand in `generated-app/`: the list renders five cars from
 the mocked API, search filters by model case-insensitively, sorting reorders by
 make alphabetically and by year newest-first, and adding a car submits the
 mutation and shows the new card without a reload. The responsive image switches
@@ -382,10 +437,20 @@ on the specification's own thresholds — `(max-width: 640px)`,
 the UI library's defaults, which is the defect the review tier was built to
 catch.
 
+`inspector-app/` is the sharper result of the two: the spec forbids an add form,
+search, sorting and images, and the reviewer confirms none of the three
+prohibitions was breached even though the other sample spec asks for all of them.
+
 Runs vary. Getting here took several, and earlier ones left a degraded test task
 that the report named and attributed. That variance is the honest character of
 generation at this model tier; the agent's contribution is that it detects the
 gap and says so rather than reporting success it cannot support.
+
+So expect your own run to differ from what is committed here. The on-disk prompt
+cache is not distributed — it is regenerable and gitignored — so running these
+specs from a fresh checkout is a cold run against a non-deterministic model. It
+should land in the same place; it will not land on the same bytes. The committed
+outputs are evidence of what the workflow produces, not a fixture it reproduces.
 
 ---
 
@@ -407,6 +472,6 @@ agent/
     └── pipeline/              plan, generate, validate, review, run
 ```
 
-24 source files, ~4,400 lines, 194 tests. `npm run typecheck && npm run test` in
-`agent/` checks the agent itself; it is held to the same strict compiler settings
-as the code it emits.
+24 source files, ~4,700 lines, 216 tests across 15 test files.
+`npm run typecheck && npm run test` in `agent/` checks the agent itself; it is
+held to the same strict compiler settings as the code it emits.
