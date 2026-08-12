@@ -30,6 +30,19 @@
 > test generalisation — `detail-inspector.spec.md` forbids the add form, search
 > and sorting that the first spec requires, and the agent omits all three.
 >
+> ### Packaging this repository
+>
+> Build the archive from git, never by zipping the working directory:
+>
+> ```bash
+> git archive --format=zip --prefix=Fullstack-Coding-Challenge/ -o submission.zip HEAD
+> ```
+>
+> `git archive` ships tracked files only. Zipping the folder instead sweeps in
+> `agent/.env`, the `agent/.cache/` response cache, `node_modules/`, the whole
+> `.git/` directory and macOS `__MACOSX/` metadata — none of which belong in a
+> submission, and the first of which is a secret.
+>
 > The brief as received follows below, unchanged.
 
 ---
