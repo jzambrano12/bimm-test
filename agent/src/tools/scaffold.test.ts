@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, readdir, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -10,7 +10,22 @@ async function makeFakeBoilerplate(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "agent-boilerplate-"));
 
   await writeFile(join(root, "index.html"), "<html></html>");
-  await writeFile(join(root, "package.json"), '{"name":"car-inventory-boilerplate"}');
+  // Mirrors the real root: app scripts alongside the two that drive the agent
+  // workspace, which must not survive into a generated app.
+  await writeFile(
+    join(root, "package.json"),
+    JSON.stringify({
+      name: "car-inventory-boilerplate",
+      scripts: {
+        agent: "npm --prefix ./agent run agent --",
+        "agent:install": "npm --prefix ./agent install",
+        dev: "vite",
+        build: "tsc -b && vite build",
+        test: "vitest run",
+        typecheck: "tsc --noEmit",
+      },
+    }),
+  );
   await writeFile(join(root, "package-lock.json"), "{}");
   await writeFile(join(root, "tsconfig.json"), "{}");
   await writeFile(join(root, "vite.config.ts"), "export default {};");
@@ -78,6 +93,32 @@ describe("scaffold", () => {
     expect(entries).not.toContain("agent");
     expect(entries).not.toContain("README.md");
     expect(entries).not.toContain(".env.example");
+  });
+
+  /**
+   * The agent workspace is excluded from the copy, so any script pointing at it
+   * would ship broken — `npm run agent` in a generated app would look for an
+   * ./agent that is not there. The app's own scripts must survive untouched.
+   */
+  it("strips scripts that drive the agent workspace, keeping the app's own", async () => {
+    const targetRoot = join(workDir, "generated-app");
+    await scaffold({ sourceRoot, targetRoot, resume: false });
+
+    const pkg = JSON.parse(await readFile(join(targetRoot, "package.json"), "utf8")) as {
+      scripts: Record<string, string>;
+    };
+
+    expect(Object.keys(pkg.scripts)).toEqual(["dev", "build", "test", "typecheck"]);
+    expect(pkg.scripts["build"]).toBe("tsc -b && vite build");
+  });
+
+  it("leaves a boilerplate with no scripts alone", async () => {
+    await writeFile(join(sourceRoot, "package.json"), '{"name":"car-inventory-boilerplate"}');
+    const targetRoot = join(workDir, "generated-app");
+
+    await expect(scaffold({ sourceRoot, targetRoot, resume: false })).resolves.toMatchObject({
+      reused: false,
+    });
   });
 
   it("does not copy the output directory into itself when nested in the source", async () => {

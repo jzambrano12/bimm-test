@@ -472,6 +472,6 @@ agent/
     └── pipeline/              plan, generate, validate, review, run
 ```
 
-24 source files, ~4,700 lines, 216 tests across 15 test files.
+24 source files, ~4,700 lines, 218 tests across 15 test files.
 `npm run typecheck && npm run test` in `agent/` checks the agent itself; it is
 held to the same strict compiler settings as the code it emits.

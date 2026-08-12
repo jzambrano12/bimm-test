@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { basename, join, resolve, sep } from "node:path";
+import { basename, join, relative, resolve, sep } from "node:path";
 import { pathToFileURL } from "node:url";
 import { loadConfig, ConfigError } from "./config.ts";
 import { ArtifactRegistry } from "./context/artifacts.ts";
@@ -341,9 +341,14 @@ async function main(): Promise<number> {
     (task) => task.status === "degraded" || task.status === "failed",
   );
 
+  // Relative to the repository root, not absolute. These artifacts are committed
+  // alongside the generated app, and an absolute path bakes whoever ran it into
+  // the deliverable — it reads as machine-specific and tells a reader nothing.
+  const fromRepoRoot = (target: string): string => relative(boilerplateRoot(), target) || ".";
+
   const artifacts = await writeRunArtifacts(options.outputDir, {
-    spec: options.specPath,
-    outputDir: options.outputDir,
+    spec: fromRepoRoot(options.specPath),
+    outputDir: fromRepoRoot(options.outputDir),
     provider: config.baseUrl,
     plannerModel: models.planner,
     workerModel: models.worker,
